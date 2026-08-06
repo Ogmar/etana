@@ -1,0 +1,202 @@
+# =============================================================================
+# Balloon Mission Database
+# =============================================================================
+# The single source of truth for packet structure. Read from BOTH ends:
+#   - the simulator reads this to ENCODE field values into bytes
+#   - the ground system reads this to DECODE bytes back into field values
+#
+# Designed around XTCE concepts so the later migration to real XTCE is a
+# reshape, not a rewrite. The mapping to XTCE:
+#   parameter_types  -> XTCE ParameterTypeSet   (how a value is encoded + calibrated)
+#   parameters       -> XTCE ParameterSet        (named telemetry points)
+#   containers       -> XTCE SequenceContainer   (the packet layout for one APID)
+#   calibrators      -> XTCE calibrator elements  (raw counts -> engineering units)
+#
+# All multi-byte fields are big-endian (network order / CCSDS convention).
+# =============================================================================
+
+mission:
+  name: "Etana"           # the mission
+  vehicle: "Eagle-1"      # the specific balloon this database describes
+  description: "Etana high-altitude balloon telemetry mission database"
+  byte_order: big_endian
+  # CCSDS Space Packet primary header is a fixed 6 bytes prepended to every
+  # packet. The codec builds it from these per-container values; it is NOT
+  # redefined per packet here.
+  ccsds:
+    version: 0            # CCSDS packet version number (always 0 for v1)
+    sequence_flags: 3     # 0b11 = unsegmented. We never segment. Set and forget.
+
+# -----------------------------------------------------------------------------
+# Parameter types — the reusable "how is this value encoded" definitions.
+# Separating types from parameters (as XTCE does) means many parameters can
+# share one encoding, and a calibration curve is defined once.
+# -----------------------------------------------------------------------------
+parameter_types:
+
+  # --- raw integer encodings (no calibration; value IS the number) ---
+  uint8:   { encoding: unsigned_int, size_bits: 8 }
+  uint16:  { encoding: unsigned_int, size_bits: 16 }
+  uint32:  { encoding: unsigned_int, size_bits: 32 }
+  int16:   { encoding: signed_int,   size_bits: 16 }
+
+  # --- GPS coordinate: stored as a scaled integer to save airtime ---
+  # Onboard sends degrees * 1e7 as a signed 32-bit int (the classic "1e7 fixed
+  # point" trick). Ground applies the linear calibrator to recover degrees.
+  # This is a POLYNOMIAL calibrator of order 1 (a plain linear scale).
+  latlon_deg:
+    encoding: signed_int
+    size_bits: 32
+    unit: "deg"
+    calibrator:
+      type: polynomial
+      coefficients: [0.0, 1.0e-7]   # value = 0 + 1e-7 * raw
+
+  # --- altitude in metres, unsigned 16-bit, no scaling needed (0..65535 m) ---
+  altitude_m:
+    encoding: unsigned_int
+    size_bits: 16
+    unit: "m"
+
+  # --- ozone: raw ADC counts from the electrochemical cell ---
+  # NOTE: we downlink the RAW COUNT, not ppb. The calibration below is a
+  # PLACEHOLDER the chemist will refine (and re-run over the raw archive) later.
+  # This is exactly why calibration lives on the ground: change these numbers,
+  # re-parse history, every past measurement improves. No re-flight.
+  ozone_counts:
+    encoding: unsigned_int
+    size_bits: 16
+    unit: "ppb"
+    calibrator:
+      type: polynomial
+      coefficients: [-12.5, 0.0488]   # placeholder ppb = -12.5 + 0.0488 * counts
+
+  # --- CO2: raw ADC counts, placeholder linear cal to ppm ---
+  co2_counts:
+    encoding: unsigned_int
+    size_bits: 16
+    unit: "ppm"
+    calibrator:
+      type: polynomial
+      coefficients: [0.0, 0.61]       # placeholder ppm = 0.61 * counts
+
+  # --- battery voltage: millivolts as uint16, calibrate to volts ---
+  battery_mv:
+    encoding: unsigned_int
+    size_bits: 16
+    unit: "V"
+    calibrator:
+      type: polynomial
+      coefficients: [0.0, 0.001]      # V = mV / 1000
+
+  # --- temperature: signed centi-degrees C (e.g. -4012 = -40.12 C) ---
+  temp_cdeg:
+    encoding: signed_int
+    size_bits: 16
+    unit: "degC"
+    calibrator:
+      type: polynomial
+      coefficients: [0.0, 0.01]       # degC = raw / 100
+
+  # --- GPS fix quality: enumerated (an XTCE EnumeratedParameterType) ---
+  fix_quality:
+    encoding: unsigned_int
+    size_bits: 8
+    enumeration:
+      0: "no_fix"
+      1: "2d_fix"
+      2: "3d_fix"
+      3: "dgps_fix"
+
+  # --- event code: enumerated flight events ---
+  event_code:
+    encoding: unsigned_int
+    size_bits: 8
+    enumeration:
+      1: "launch_detected"
+      2: "burst_detected"
+      3: "descent_detected"
+      4: "landing_detected"
+      5: "cutdown_fired"
+      6: "mode_change"
+
+# -----------------------------------------------------------------------------
+# Parameters — named telemetry points, each referencing a type.
+# -----------------------------------------------------------------------------
+parameters:
+  # GPS (APID 100)
+  gps_latitude:   { type: latlon_deg,  description: "WGS84 latitude"  }
+  gps_longitude:  { type: latlon_deg,  description: "WGS84 longitude" }
+  gps_altitude:   { type: altitude_m,  description: "GPS altitude MSL" }
+  gps_fix:        { type: fix_quality, description: "Fix quality" }
+  gps_sats:       { type: uint8,       description: "Satellites in view" }
+
+  # Payload science (APID 200)
+  ozone_raw:      { type: ozone_counts, description: "Ozone cell ADC counts" }
+  co2_raw:        { type: co2_counts,   description: "CO2 sensor ADC counts" }
+  payload_temp:   { type: temp_cdeg,    description: "Payload internal temp" }
+
+  # Housekeeping (APID 300)
+  battery:        { type: battery_mv,   description: "Main battery voltage" }
+  temp_internal:  { type: temp_cdeg,    description: "Avionics bay temp" }
+  temp_external:  { type: temp_cdeg,    description: "Outside air temp" }
+  uptime_s:       { type: uint32,       description: "Seconds since boot" }
+  last_rssi:      { type: int16,        description: "Last uplink RSSI (if any)" }
+
+  # Events (APID 400)
+  event:          { type: event_code,   description: "Flight event that occurred" }
+
+# -----------------------------------------------------------------------------
+# Containers — one per APID. Defines the packet's field layout, in order.
+# The onboard timestamp is a first-class field in EVERY container: it is the
+# spacecraft-clock time the sample was taken. The ground separately records
+# Earth-receive time (ERT) at ingestion — the two are kept distinct so that
+# SD-card backfill after recovery (old onboard times, new ERT) just works.
+#
+# 'apid' is the CCSDS Application Process Identifier (11 bits, 0..2047).
+# 'rate_hz' is the nominal downlink cadence — used by the simulator to schedule
+# emission and documented here as the rate budget per stream.
+# -----------------------------------------------------------------------------
+containers:
+
+  gps:
+    apid: 100
+    rate_hz: 1.0            # tracking + recovery; loss here hurts most
+    description: "GPS position and fix status"
+    fields:
+      - { name: onboard_time, type: uint32, description: "Onboard time, seconds" }
+      - { parameter: gps_latitude }
+      - { parameter: gps_longitude }
+      - { parameter: gps_altitude }
+      - { parameter: gps_fix }
+      - { parameter: gps_sats }
+
+  payload:
+    apid: 200
+    rate_hz: 0.2            # electrochemical cells respond in seconds
+    description: "Atmospheric science payload"
+    fields:
+      - { name: onboard_time, type: uint32 }
+      - { parameter: ozone_raw }
+      - { parameter: co2_raw }
+      - { parameter: payload_temp }
+
+  housekeeping:
+    apid: 300
+    rate_hz: 0.1            # slow-moving system health
+    description: "Vehicle health and status"
+    fields:
+      - { name: onboard_time, type: uint32 }
+      - { parameter: battery }
+      - { parameter: temp_internal }
+      - { parameter: temp_external }
+      - { parameter: uptime_s }
+      - { parameter: last_rssi }
+
+  events:
+    apid: 400
+    rate_hz: 0.0            # event-driven: emitted only when something happens
+    description: "Discrete flight events"
+    fields:
+      - { name: onboard_time, type: uint32 }
+      - { parameter: event }

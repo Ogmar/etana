@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+*.local
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Data / archives (telemetry captures, DB volumes — never commit these)
+*.db
+*.sqlite3
+/data/
+*.ccsds
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
