@@ -1,2 +1,1 @@
-# etana
-Etana — an end-to-end high-altitude balloon mission: CCSDS telemetry ground system, flight software, and mission site.
+Etana is an end-to-end high-altitude balloon mission. It comprises embedded flight software running on the balloon payload, a CCSDS telemetry ground segment that receives, decodes, archives, and visualizes the downlinked data over a LoRa link, and a mission site that tells the story of the flight. This repository contains all three, developed together as one system.
