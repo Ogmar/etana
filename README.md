@@ -1,73 +1,64 @@
 # Etana
 
-**Etana is an end-to-end high-altitude balloon mission: embedded flight software, a CCSDS telemetry ground segment, and a mission site — developed together as one system.**
+High-altitude balloon mission comprising flight software, a CCSDS telemetry
+ground segment, and a mission site.
 
-The balloon (vehicle **SV-1**) flies a payload to ~30 km carrying atmospheric
-sensors (ozone, CO₂), GPS, and housekeeping instrumentation. It downlinks
-telemetry as CCSDS Space Packets over a LoRa link. The ground segment receives,
-decodes, archives, and visualizes that telemetry in real time.
+The vehicle, Eagle-1, carries an atmospheric payload (ozone, CO₂) with GPS and
+housekeeping instrumentation to approximately 30 km, downlinking telemetry as
+CCSDS Space Packets over a LoRa link. The ground segment decodes, archives, and
+displays the telemetry in real time.
 
-> **Status:** ground segment in active development. Flight software and mission
-> site are planned and currently placeholders. This README describes the target
-> system; see each folder's README for what actually exists today.
+> **Status.** Ground segment in development. Flight software and mission site are
+> planned; their folders are placeholders. This README describes the target
+> system.
 
----
+## Architecture
 
-## Architecture at a glance
+```mermaid
+flowchart LR
+    MDB[("Mission database<br/>mdb/etana.yaml")]
 
+    FSW["Flight software<br/>Eagle-1"]
+    TRANSPORT["LoRa link"]
+    GROUND["Ground segment<br/>decode, archive, serve"]
+    SITE["Mission site"]
+
+    FSW -->|"CCSDS bytes"| TRANSPORT --> GROUND --> SITE
+
+    MDB -.-> FSW
+    MDB -.-> GROUND
 ```
-  balloon (SV-1)                        ground
-  ┌────────────────┐   CCSDS packets    ┌──────────────────────────────────────┐
-  │ flight software│ ─── over LoRa ───▶ │ ingestion → archive → API → dashboard │
-  │  (C++, on MCU) │                    │        (Python · Django · React)      │
-  └────────────────┘                    └──────────────────────────────────────┘
-           │                                              │
-           └──────────── both read ─────────────┬─────────┘
-                                                 ▼
-                                        mdb/etana.yaml
-                              (the mission database — the shared
-                               definition of every packet's structure)
-```
 
-The **mission database** (`mdb/etana.yaml`) is the single source of truth for
-packet structure. The flight software reads it to *encode* telemetry; the ground
-segment reads it to *decode* telemetry. It is deliberately placed at the top
-level, above both, because it belongs to neither — it is the contract between
-them.
+The mission database (`mdb/etana.yaml`) is the sole definition of packet
+structure. The flight software reads it to encode telemetry; the ground segment
+reads it to decode telemetry.
 
-Development happens against a **simulator** first: it emits the exact CCSDS bytes
-the radio will one day produce, over a swappable transport (TCP now, LoRa later),
-so the entire ground segment is built and tested before any hardware exists.
+The ground segment abstracts the transport behind a packet-source interface,
+making the receive path independent of the source of bytes. During development
+that source is a simulator emitting the same byte stream the flight software will
+produce, which allows the ground segment to be built and tested before flight
+hardware exists.
 
-For the full design — phases, component architecture, and rationale — see
-[`docs/DESIGN.md`](docs/DESIGN.md).
+See [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) and
+[`docs/DESIGN.md`](docs/DESIGN.md) for detail.
 
----
-
-## Repository layout
+## Layout
 
 ```
 etana/
-├── mdb/etana.yaml        # the mission database — shared contract (EXISTS)
-├── ground-segment/       # telemetry receive/decode/archive/dashboard (in progress)
-├── flight-software/      # embedded C++ on the payload (planned)
-├── website/              # blog-style mission site + flight replay (planned)
-└── docs/DESIGN.md        # full design & build plan (EXISTS)
+├── mdb/etana.yaml        # mission database — packet definitions
+├── ground-segment/       # telemetry receive, decode, archive, dashboard
+├── flight-software/      # embedded flight software (planned)
+├── website/              # mission site (planned)
+└── docs/                 # specification and design
 ```
-
-Each component folder has its own README describing its status and structure.
-
----
 
 ## Getting started
 
-_Run instructions will land here once the ground-segment services and their
-`docker-compose.yml` exist (Phase 3 in the design doc). Until then, see
-[`docs/DESIGN.md`](docs/DESIGN.md) for the build plan and
-[`ground-segment/README.md`](ground-segment/README.md) for current progress._
-
----
+Run instructions will be added with the ground-segment services and
+`docker-compose.yml` (Phase 3). See [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md)
+and [`ground-segment/README.md`](ground-segment/README.md).
 
 ## License
 
-_TODO: choose a license (MIT is the common default for a project like this)._
+Not yet chosen.

@@ -1,13 +1,13 @@
 # Flight Software
 
-Embedded software running on the balloon payload's microcontroller (C++).
-Reads sensors, builds CCSDS Space Packets per the mission database, logs every
-packet to onboard storage, and transmits over the LoRa link.
+Embedded software for the Eagle-1 payload. Reads sensors, encodes CCSDS Space
+Packets per the mission database, logs packets to onboard storage, and transmits
+over the LoRa link.
 
-> **Status:** planned. This is the embedded teammate's domain and has not started.
-> It shares exactly one thing with the ground segment: the mission database at
-> [`../mdb/etana.yaml`](../mdb/etana.yaml), which defines the packet structure
-> both sides must agree on.
+> **Status.** Planned. Not started.
 
-Kept in this monorepo for a single mission front door; can be split into its own
-repo later (`etana-flight-software`) if it grows its own team and cadence.
+Shares the mission database at [`../mdb/etana.yaml`](../mdb/etana.yaml) with the
+ground segment; that file defines the packet structure both sides implement.
+
+Held in this repository for a single mission history. Separable into its own
+repository if it develops an independent release cadence.
