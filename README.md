@@ -1,5 +1,7 @@
 # Etana
 
+[![CI](https://github.com/Ogmar/etana/actions/workflows/ci.yml/badge.svg)](https://github.com/Ogmar/etana/actions/workflows/ci.yml)
+
 High-altitude balloon mission comprising flight software, a CCSDS telemetry
 ground segment, and a mission site.
 
@@ -58,6 +60,20 @@ etana/
 Run instructions will be added with the ground-segment services and
 `docker-compose.yml` (Phase 3). See [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md)
 and [`ground-segment/README.md`](ground-segment/README.md).
+
+## Development
+
+Continuous integration runs the test suite on every push and pull request to
+`main`, across Python 3.10–3.12 (`.github/workflows/ci.yml`). The badge above
+reflects the current state of `main`.
+
+To run the CCSDS codec tests locally:
+
+```
+cd ground-segment/packages/ccsds
+pip install -e ".[dev]"
+pytest -v
+```
 
 ## License
 
