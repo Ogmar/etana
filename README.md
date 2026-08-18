@@ -10,9 +10,11 @@ housekeeping instrumentation to approximately 30 km, downlinking telemetry as
 CCSDS Space Packets over a LoRa link. The ground segment decodes, archives, and
 displays the telemetry in real time.
 
-> **Status.** Ground segment in development. Flight software and mission site are
-> planned; their folders are placeholders. This README describes the target
-> system.
+> **Status.** Ground segment Phases 0 and 1 complete: a CCSDS codec, a transport
+> seam, and a simulator that streams a full flight to the ingestion runner —
+> runnable with one command (see `ground-segment/README.md`). Persistence, API,
+> dashboard, flight software, and mission site are planned. This README describes
+> the target system.
 
 ## Architecture
 
@@ -63,18 +65,31 @@ and [`ground-segment/README.md`](ground-segment/README.md).
 
 ## Development
 
-Continuous integration runs the test suite on every push and pull request to
-`main`, across Python 3.10–3.12 (`.github/workflows/ci.yml`). The badge above
-reflects the current state of `main`.
-
-To run the CCSDS codec tests locally:
+The ground segment is developed as installable Python packages under
+`ground-segment/`. To run the full simulator-to-ingestion demo:
 
 ```
-cd ground-segment/packages/ccsds
-pip install -e ".[dev]"
-pytest -v
+cd ground-segment
+pip install -e packages/ccsds
+pip install -e services/simulator
+pip install -e services/ingestion
+python run_demo.py --speed 60
+```
+
+This streams a full simulated flight through the ingestion runner. See
+[`ground-segment/README.md`](ground-segment/README.md) for details and for
+running the two sides separately.
+
+Continuous integration runs each package's test suite on every push and pull
+request to `main`, across Python 3.10–3.12 (`.github/workflows/ci.yml`). The
+badge above reflects the current state of `main`. To run the tests locally:
+
+```
+cd ground-segment/packages/ccsds   && pip install -e ".[dev]" && pytest
+cd ground-segment/services/ingestion && pip install -e ".[dev]" && pytest
+cd ground-segment/services/simulator && pip install -e ".[dev]" && pytest
 ```
 
 ## License
 
-Not yet chosen.
+Released under the MIT License. See [`LICENSE`](LICENSE).

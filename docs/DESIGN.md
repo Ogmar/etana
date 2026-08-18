@@ -39,21 +39,24 @@ resulting archive and does not participate in ingestion.
 
 ## 2. Phases
 
-### Phase 0 — Codec
+### Phase 0 — Codec (complete)
 Define the mission database format and the CCSDS Space Packet codec (encode and
 decode) driven by it. No transport, storage, or web layer.
 
-Exit criterion: a round-trip test passes — encode a packet from field values,
-decode it, and assert both the recovered values and the primary-header bytes are
-correct.
+Exit criterion (met): a round-trip test passes — encode a packet from field
+values, decode it, and assert both the recovered values and the primary-header
+bytes are correct.
 
-### Phase 1 — Transport interface and simulator
-Define `IPacketSource` and implement `TcpPacketSource`. Implement the simulator as
-a TCP server emitting packets on a schedule via the Phase 0 codec. Implement a
-minimal ingestion process that reads, decodes, and logs parameters.
+### Phase 1 — Transport interface and simulator (complete)
+Define the packet-source seam (`PacketSource`) and implement `TcpPacketSource`
+with header-driven framing. Implement the simulator as a TCP server that walks a
+flight profile (ascent, burst, descent, drift, landing) and emits packets on each
+container's schedule via the Phase 0 codec. Implement the ingestion runner that
+connects, decodes, and displays telemetry, plus a launcher that runs both
+together.
 
-Exit criterion: decoded values stream from the simulator through ingestion in real
-time.
+Exit criterion (met): decoded values stream from the simulator through ingestion
+in real time; `run_demo.py` runs a full flight end to end with one command.
 
 ### Phase 2 — Archive
 Provision Postgres. Implement the raw packet store (bytes, ERT, link stats, APID,
