@@ -21,6 +21,7 @@ from pathlib import Path
 from ccsds import MissionDatabase, encode_packet, load_mission_db
 
 from .flight_profile import Flight, FlightConfig, Phase
+from .pathology import Pathology, PathologyConfig
 from . import telemetry
 
 
@@ -48,12 +49,14 @@ EVENT_LANDING = 4
 
 class Simulator:
     def __init__(self, db: MissionDatabase, flight: Flight,
-                 speed: float = 1.0, tick_s: float = 0.1):
+                 speed: float = 1.0, tick_s: float = 0.1,
+                 pathology: "Pathology | None" = None):
         self.db = db
         self.flight = flight
         self.speed = speed          # sim-seconds per real-second
         self.tick_s = tick_s        # real-seconds between loop iterations
         self._battery_v = 8.4       # starts full, drains over the flight
+        self.pathology = pathology or Pathology()
 
         self._streams = self._build_streams()
         self._event_seq = 0
@@ -120,7 +123,18 @@ class Simulator:
             values = telemetry.housekeeping_values(state, onboard, self._battery_v)
         else:
             return
+        # Sequence is consumed even if the packet is dropped: on a real link the
+        # flight software assigned and sent this sequence number; the ground just
+        # never received it. That is what makes the loss a detectable gap.
         packet = encode_packet(self.db, stream.container, values, stream.take_seq())
+        self._emit(conn, packet, sim_t)
+
+    def _emit(self, conn, packet: bytes, sim_t: float) -> None:
+        """Apply link pathology, then send (or not)."""
+        if self.pathology.should_drop(sim_t):
+            return  # lost in transit
+        if self.pathology.should_corrupt():
+            packet = self.pathology.corrupt(packet)
         self._send(conn, packet)
 
     def _send_event(self, conn, sim_t: float, code: int) -> None:
@@ -144,6 +158,12 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=9000)
     parser.add_argument("--speed", type=float, default=60.0,
                         help="sim-seconds per real-second (default 60x)")
+    parser.add_argument("--no-pathology", action="store_true",
+                        help="disable link loss/corruption (clean stream)")
+    parser.add_argument("--loss", type=float, default=None,
+                        help="background loss probability (default 0.01)")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="random seed for reproducible pathology")
     parser.add_argument("--mdb", type=Path,
                         default=Path(__file__).resolve().parents[4] / "mdb" / "etana.yaml")
     args = parser.parse_args()
@@ -156,7 +176,14 @@ def main() -> None:
 
     db = load_mission_db(args.mdb)
     flight = Flight(FlightConfig())
-    Simulator(db, flight, speed=args.speed).run(host=args.host, port=args.port)
+
+    cfg_kwargs = {"enabled": not args.no_pathology}
+    if args.loss is not None:
+        cfg_kwargs["background_loss"] = args.loss
+    pathology = Pathology(PathologyConfig(**cfg_kwargs), seed=args.seed)
+
+    Simulator(db, flight, speed=args.speed, pathology=pathology).run(
+        host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
