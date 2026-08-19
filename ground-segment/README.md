@@ -1,102 +1,162 @@
 # Ground Segment
 
-Receives, decodes, archives, and displays Eagle-1 telemetry. Python ingestion,
-Django/DRF API, React/TypeScript dashboard, Postgres storage.
+Receives, decodes, archives, and (soon) serves Eagle-1 telemetry. Python
+ingestion, Postgres archive, with a Django/DRF API and React dashboard planned.
 
-> **Status.** Phases 0 and 1 complete and runnable: the CCSDS codec, the
-> transport seam, and a simulator that streams a full flight to the ingestion
-> runner. Persistence, API, and dashboard are not yet built.
+> **Status.** Phases 0-2 complete and runnable: the CCSDS codec, the transport
+> seam, a simulator that flies a realistic profile with injected link loss, an
+> ingestion pipeline that decodes and archives to Postgres with per-APID loss
+> detection, and replay/recalibration from the raw archive. The REST API and
+> dashboard (Phase 3) are not yet built.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    BYTES(["bytes in"]) --> SRC["Packet source<br/>TCP / LoRa / replay"]
+    BYTES(["bytes in"]) --> SRC["Packet source<br/>TCP / replay (LoRa later)"]
     SRC --> CODEC["CCSDS codec<br/>byte-value conversion"]
     MDB[("Mission database<br/>etana.yaml")] -.-> CODEC
-    CODEC --> PIPE["Ingestion pipeline<br/>decode, decommutate, loss detection"]
+    CODEC --> PIPE["Ingestion pipeline<br/>decode, archive, loss detection"]
     PIPE --> RAW[("Raw archive<br/>bit-exact bytes + ERT")]
     PIPE --> PARAM[("Parameter archive<br/>decoded time series")]
-    RAW -.->|"replay"| SRC
-    PARAM --> API["API<br/>Django + DRF, read-only"]
-    API --> DASH["Dashboard<br/>React + TypeScript"]
+    RAW -.->|"replay / recalibrate"| SRC
+    PARAM --> API["API<br/>Django + DRF, read-only (planned)"]
+    API --> DASH["Dashboard<br/>React + TypeScript (planned)"]
 
-    subgraph postgres["Postgres (planned)"]
+    subgraph postgres["Postgres"]
         RAW
         PARAM
     end
 ```
+
+The ingestion path (packet source → codec → archive) is a long-running Python
+process, built and working. The read path (database → API → dashboard) is
+planned for Phase 3. The two meet at Postgres.
+
+The transport is abstracted behind the packet-source interface: `TcpPacketSource`
+now, `ReplayPacketSource` for re-reading the archive, and `LoRaPacketSource` for
+the flight radio later. Nothing downstream of the interface depends on the source
+— which is why replaying stored packets uses the identical decode/archive path.
 
 ## Components
 
 | Component | Responsibility | Stack | Status |
 |-----------|---------------|-------|--------|
 | CCSDS codec | Byte-value conversion per the mission database; no I/O | Python | Built |
-| Packet source | Transport abstraction; frames byte stream into packets | Python | Built (TCP) |
-| Simulator | Emits a simulated flight as CCSDS packets over TCP | Python | Built |
-| Ingestion runner | Connects to a source, decodes, displays telemetry | Python | Built (no archive yet) |
-| Raw archive | Bit-exact received bytes, Earth-receive time, link stats | Postgres | Planned (Phase 2) |
-| Parameter archive | Decoded, calibrated time series; regenerable from raw | Postgres | Planned (Phase 2) |
+| Packet source | Transport seam; frames a byte stream into packets | Python | Built (TCP, replay) |
+| Simulator | Flies a realistic profile; emits CCSDS over TCP with injected loss | Python | Built |
+| Ingestion pipeline | Decode → archive → per-APID gap detection | Python | Built |
+| Raw archive | Bit-exact bytes, Earth-receive time, link stats | Postgres | Built |
+| Parameter archive | Decoded, calibrated time series; regenerable from raw | Postgres | Built |
+| Replay / recalibrate | Re-decode stored raw with updated calibration, no re-flight | Python | Built |
 | API | Read-only REST over the archive | Django + DRF | Planned (Phase 3) |
 | Dashboard | Map, plots, loss indicators | React + TS | Planned (Phase 3) |
 
-The system has two paths that will meet at Postgres. The ingestion path
-(packet source -> codec -> archive) is a long-running Python process. The read
-path (database -> API -> dashboard) is read-only. Currently only the ingestion
-path exists, and it displays telemetry rather than storing it.
+## Setup
 
-The transport is abstracted behind the packet-source interface:
-`TcpPacketSource` now, `LoRaPacketSource` for the flight radio, and a replay
-source for re-processing stored data. Nothing downstream of the interface
-depends on the source.
-
-## Running the demo
-
-Install the packages (editable), then run the simulator and ingestion together:
+The services are installable Python packages; Postgres runs in Docker.
 
 ```
+# 1. Install the packages (editable)
 pip install -e packages/ccsds
-pip install -e services/simulator
-pip install -e services/ingestion
+pip install -e "services/simulator[dev]"
+pip install -e "services/ingestion[dev]"
+pip install -e "services/api[dev]"
 
+# 2. Start Postgres (from ground-segment/)
+cp .env.example .env          # edit credentials if you like
+docker compose up -d          # wait for 'healthy' in: docker compose ps
+
+# 3. Create the archive tables (once)
+cd services/api && python manage.py migrate
+```
+
+If port 5432 is taken (e.g. a native Postgres), set `POSTGRES_PORT=5433` in
+`.env` and recreate the container.
+
+## Running a flight
+
+The simulator (TCP server) flies and streams; the ingestion runner (TCP client)
+decodes, archives, and detects loss. Run both with one command from
+`ground-segment/`:
+
+```
 python run_demo.py --speed 60
 ```
 
-`run_demo.py` starts the simulator (TCP server) and the ingestion runner (TCP
-client), streams a full simulated flight, and shuts both down at landing.
-`--speed` sets sim-seconds per real-second: `1` is real time, higher compresses
-the ~2.3-hour flight. To run the two sides separately, in two terminals:
+Or run them separately in two terminals:
 
 ```
-python -m simulator.main --speed 60      # from services/simulator
-python -m ingestion.main                 # from services/ingestion
+# terminal 1 — simulator (from services/simulator)
+python -m simulator.main --speed 60
+
+# terminal 2 — ingestion (from services/ingestion)
+python -m ingestion.main
 ```
+
+`--speed` is sim-seconds per real-second (`1` = real time; higher compresses the
+~2.3-hour flight). Ingestion archives to Postgres by default; add `--no-archive`
+to decode and display only (no database needed).
+
+Simulator link-loss controls: `--loss 0.05` sets the background loss rate,
+`--no-pathology` sends a clean stream, `--seed N` makes loss reproducible.
+
+## Inspecting the archive
+
+```
+# Django shell (from services/api)
+python manage.py shell
+>>> from telemetry.models import RawPacket, ParameterSample, LossEvent
+>>> RawPacket.objects.count()
+>>> ParameterSample.objects.filter(parameter_name="gps_altitude").order_by("onboard_time")
+
+# or SQL directly (from ground-segment)
+docker compose exec postgres psql -U etana -d etana -c \
+  "SELECT apid, COUNT(*) FROM telemetry_rawpacket GROUP BY apid;"
+```
+
+## Replay and recalibration
+
+The raw archive is the source of truth; parameter samples are derived and
+regenerable. After updating calibration coefficients in `mdb/etana.yaml`,
+re-decode the stored raw packets to regenerate corrected values with no re-flight:
+
+```python
+# from services/api, in `python manage.py shell`
+from ccsds import load_mission_db
+from telemetry import archive
+db = load_mission_db("../../../mdb/etana.yaml")
+archive.reprocess(db, dry_run=True)    # report what would change, write nothing
+archive.reprocess(db, dry_run=False)   # regenerate samples (transactional)
+```
+
+Reprocess runs in a single transaction (a failure rolls back), never modifies raw
+packets, and can always be re-run. Comparing two calibrations needs no versioning:
+because raw is immutable, any calibration's output is derivable from it on demand.
 
 ## Layout
 
 ```
 ground-segment/
 ├── run_demo.py             # runs simulator + ingestion together
+├── docker-compose.yml      # Postgres for the archive
 ├── packages/
-│   └── ccsds/              # mission-database-driven codec (Built)
+│   └── ccsds/              # mission-database-driven codec
 ├── services/
-│   ├── simulator/          # flight model + TCP transmitter (Built)
-│   │   ├── flight_profile.py   # pure flight physics
-│   │   ├── telemetry.py        # flight state -> raw values
-│   │   └── main.py             # TCP server, scheduling loop
-│   ├── ingestion/          # packet sources + runner (Built; archive planned)
-│   │   ├── sources/            # PacketSource seam, TcpPacketSource
-│   │   └── main.py             # connect, decode, display
-│   └── api/                # Django + DRF read API (Planned)
-└── frontend/               # React + TypeScript dashboard (Planned)
+│   ├── simulator/          # flight model, telemetry, link pathology, TCP server
+│   ├── ingestion/          # packet sources (tcp, replay), gap detection, runner
+│   └── api/                # Django archive: models, archive writer, reprocess
+└── frontend/               # React + TypeScript dashboard (planned)
 ```
 
 ## Tests
 
-Each package has its own suite, run in CI across Python 3.10-3.12:
+```
+cd packages/ccsds && pytest             # codec
+cd services/ingestion && pytest         # framing, gap detection
+cd services/simulator && pytest         # flight model, telemetry, pathology
+cd services/api && python manage.py test   # archive + reprocess (Django runner)
+```
 
-```
-cd packages/ccsds && pytest        # codec: header, mission DB, round-trip
-cd services/ingestion && pytest    # packet framing under fragmentation, TCP
-cd services/simulator && pytest    # flight model shape, telemetry, scheduling
-```
+Note the api package uses Django's test runner, not pytest. CI runs all four
+across Python 3.10-3.12.

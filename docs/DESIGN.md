@@ -58,13 +58,17 @@ together.
 Exit criterion (met): decoded values stream from the simulator through ingestion
 in real time; `run_demo.py` runs a full flight end to end with one command.
 
-### Phase 2 — Archive
+### Phase 2 — Archive (complete)
 Provision Postgres. Implement the raw packet store (bytes, ERT, link stats, APID,
 sequence count) and the parameter store (decoded time series). Implement per-APID
-sequence-gap detection and record loss events.
+sequence-gap detection and record loss events. Add link-loss injection to the
+simulator so detection has something to catch, and a replay source that re-decodes
+stored raw packets for recalibration without re-flight.
 
-Exit criterion: a flight run is queryable in Postgres as raw packets and parameter
-series; ingestion restart mid-run produces no corruption and records the gap.
+Exit criterion (met): a flight run is queryable in Postgres as raw packets and
+parameter series; loss is injected and detected per APID; stored packets replay
+through the same pipeline, and reprocess regenerates parameter samples from raw
+under a new calibration.
 
 ### Phase 3 — API and dashboard
 Django/DRF over the archive. React/TypeScript dashboard: map track, altitude plot,

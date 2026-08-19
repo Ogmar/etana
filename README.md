@@ -10,11 +10,12 @@ housekeeping instrumentation to approximately 30 km, downlinking telemetry as
 CCSDS Space Packets over a LoRa link. The ground segment decodes, archives, and
 displays the telemetry in real time.
 
-> **Status.** Ground segment Phases 0 and 1 complete: a CCSDS codec, a transport
-> seam, and a simulator that streams a full flight to the ingestion runner —
-> runnable with one command (see `ground-segment/README.md`). Persistence, API,
-> dashboard, flight software, and mission site are planned. This README describes
-> the target system.
+> **Status.** Ground segment Phases 0-2 complete: a CCSDS codec, a transport
+> seam, a simulator that flies a realistic profile with injected link loss, and an
+> ingestion pipeline that archives telemetry to Postgres with per-APID loss
+> detection and replay/recalibration — runnable with one command (see
+> `ground-segment/README.md`). The REST API, dashboard, flight software, and
+> mission site are planned. This README describes the target system.
 
 ## Architecture
 
