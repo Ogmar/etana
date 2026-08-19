@@ -1,41 +1,88 @@
 """Ingestion runner: connect to a packet source and process the telemetry stream.
 
-For now this decodes each packet and prints it. In Phase 2 the same loop gains
-the archive write (raw + parameter stores) and sequence-gap detection; the
-structure here is the seam it hangs off.
+The pipeline runs three separate steps per packet:
+    1. decode  - bytes to values (the ccsds codec)
+    2. archive - store the raw packet and its parameter samples
+    3. gaps    - check the sequence counter and record any loss
 
-Network role: ingestion is the CLIENT. It connects to the simulator (or, later,
-reads from a radio via a different packet source) and pulls packets.
+Archiving and gap detection are independent: a packet is archived whether or not
+it revealed a gap, and a gap is recorded by comparing sequence numbers regardless
+of archiving. Keeping them separate keeps each simple and independently correct.
+
+Network role: ingestion is the CLIENT. It connects to the simulator (or a radio
+via a different packet source) and pulls packets.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ccsds import DecodeError, MissionDatabase, decode_packet, load_mission_db
 
 from .sources.base import PacketSource, PacketSourceError
 from .sources.tcp import TcpPacketSource
+from .gap_detector import GapDetector
 
 
-def run(source: PacketSource, db: MissionDatabase, quiet: bool = False) -> int:
+def _setup_django() -> None:
+    """Initialise Django so the archive writer and models are usable outside the
+    web server. Adds the api project to the path and configures settings."""
+    api_dir = Path(__file__).resolve().parents[3] / "api"
+    sys.path.insert(0, str(api_dir))
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    import django
+    django.setup()
+
+
+def run(source: PacketSource, db: MissionDatabase, archive=None,
+        quiet: bool = False) -> dict:
     """Process every packet from a source until it is exhausted.
 
-    Returns the number of packets successfully decoded.
+    If `archive` is provided (the api telemetry.archive module), each packet is
+    stored and gaps are recorded. If None, packets are only decoded and shown
+    (no persistence) — useful for a quick look without a database.
+
+    Returns a summary dict: packets decoded, stored, and total lost.
     """
-    count = 0
+    detector = GapDetector()
+    stats = {"decoded": 0, "stored": 0, "lost": 0}
+
     for packet in source.packets():
+        # Step 1 — decode.
         try:
             decoded = decode_packet(db, packet)
         except DecodeError as exc:
             if not quiet:
                 print(f"  [decode error] {exc}")
             continue
-        count += 1
+        stats["decoded"] += 1
+        received_at = datetime.now(timezone.utc)
+
+        # Step 2 — archive (independent of gap detection).
+        if archive is not None:
+            archive.store_packet(decoded, packet, received_at=received_at)
+            stats["stored"] += 1
+
+        # Step 3 — gap detection (independent of archiving).
+        gap = detector.check(decoded.apid, decoded.sequence_count)
+        if gap is not None:
+            stats["lost"] += gap.lost_count
+            if archive is not None:
+                archive.record_loss(
+                    gap.apid, gap.expected_sequence, gap.received_sequence,
+                    gap.lost_count, detected_at=received_at)
+            if not quiet:
+                print(f"  [loss] apid={gap.apid} lost {gap.lost_count} "
+                      f"(expected {gap.expected_sequence}, got {gap.received_sequence})")
+
         if not quiet:
             _print_packet(decoded)
-    return count
+
+    return stats
 
 
 def _print_packet(decoded) -> None:
@@ -62,6 +109,8 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=9000)
     parser.add_argument("--quiet", action="store_true",
                         help="count packets without printing each one")
+    parser.add_argument("--no-archive", action="store_true",
+                        help="decode and display only; do not write to the database")
     parser.add_argument("--mdb", type=Path,
                         default=Path(__file__).resolve().parents[4] / "mdb" / "etana.yaml")
     args = parser.parse_args()
@@ -74,17 +123,26 @@ def main() -> None:
 
     db = load_mission_db(args.mdb)
 
+    archive = None
+    if not args.no_archive:
+        _setup_django()
+        from telemetry import archive as archive_module
+        archive = archive_module
+
     print(f"connecting to {args.host}:{args.port} ...")
     try:
         source = TcpPacketSource(args.host, args.port, timeout=30).connect()
     except PacketSourceError as exc:
         raise SystemExit(f"could not connect: {exc}")
 
-    print("connected; receiving telemetry\n")
+    mode = "display only" if archive is None else "archiving to database"
+    print(f"connected; receiving telemetry ({mode})\n")
     with source:
-        total = run(source, db, quiet=args.quiet)
-    print(f"\nstream ended; {total} packets decoded")
+        stats = run(source, db, archive=archive, quiet=args.quiet)
+    print(f"\nstream ended; {stats['decoded']} decoded, "
+          f"{stats['stored']} stored, {stats['lost']} lost")
 
 
 if __name__ == "__main__":
     main()
+
