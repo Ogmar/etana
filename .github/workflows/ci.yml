@@ -75,3 +75,28 @@ jobs:
       - name: Run tests
         working-directory: ground-segment/services/simulator
         run: pytest -v
+
+  api:
+    name: API / archive tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install ccsds and api with dev dependencies
+        run: |
+          pip install -e ground-segment/packages/ccsds
+          pip install -e "ground-segment/services/api[dev]"
+
+      - name: Run Django model tests (SQLite)
+        working-directory: ground-segment/services/api
+        env:
+          ETANA_DB: sqlite
+        run: python manage.py test
