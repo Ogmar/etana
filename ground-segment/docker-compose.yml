@@ -9,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-etana}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-etana}
     ports:
-      - "${POSTGRES_PORT:-5433}:5433"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - etana_pgdata:/var/lib/postgresql/data
     healthcheck:
