@@ -17,6 +17,11 @@ displays the telemetry in real time.
 > `ground-segment/README.md`). The REST API, dashboard, flight software, and
 > mission site are planned. This README describes the target system.
 
+**Flight profile explorer:** an interactive tool to explore how burst altitude,
+ascent rate, descent, and wind shape the mission — runs the real flight model, no
+install required. **[Open the explorer](https://etana-flight-explorer.streamlit.app/)**
+· [source](tools/flight-explorer/)
+
 ## Architecture
 
 ```mermaid
@@ -54,6 +59,7 @@ etana/
 ├── mdb/etana.yaml        # mission database — packet definitions
 ├── ground-segment/       # telemetry receive, decode, archive, dashboard
 ├── flight-software/      # embedded flight software (planned)
+├── tools/                # team utilities (e.g. the flight profile explorer)
 ├── website/              # mission site (planned)
 └── docs/                 # specification and design
 ```
