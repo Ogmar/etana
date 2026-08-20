@@ -106,15 +106,17 @@ React/TypeScript dashboard.
 |-------|-------------|--------|
 | 0 | CCSDS codec driven by the mission database; round-trip test passing | Complete |
 | 1 | Packet-source interface and development simulator over TCP | Complete |
-| 2 | Postgres archive (raw + parameter) with per-APID loss detection | Next |
-| 3 | Django API and React dashboard; full stack via `docker compose` | Planned |
+| 2 | Postgres archive (raw + parameter) with per-APID loss detection | Complete |
+| 3 | Django API and React dashboard; full stack via `docker compose` | Next |
 | 4+ | Landing predictor; cutdown commanding; replay UI; mission site | Planned |
 
-Phases 0 and 1 are complete: the codec, the transport seam, and a simulator that
-streams a full flight to the ingestion runner, runnable with one command. The
-ground segment is developed against that simulator, which emits the same CCSDS
-byte stream the flight software will produce, so the receive path is built and
-tested before flight hardware exists. Phase detail in [`DESIGN.md`](DESIGN.md).
+Phases 0-2 are complete: the codec, the transport seam, a simulator that flies a
+realistic profile with injected link loss, an ingestion pipeline that archives to
+Postgres with per-APID loss detection, and replay/recalibration from the raw
+archive. The ground segment is developed against the simulator, which emits the
+same CCSDS byte stream the flight software will produce, so the receive path is
+built and tested before flight hardware exists. Phase detail in
+[`DESIGN.md`](DESIGN.md).
 
 ## 8. Open items
 
