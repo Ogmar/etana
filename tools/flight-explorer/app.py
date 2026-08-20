@@ -69,13 +69,28 @@ flight = Flight(cfg)
 
 # --- sample the flight --------------------------------------------------------
 
+import altair as alt
+import pandas as pd
+
 states = flight.sample(400)  # one-pass sampling; fast enough for live sliders
 
-alt_km = [s.altitude_m / 1000 for s in states]
-descent_rate = [-s.vertical_speed_ms for s in states if s.phase == Phase.DESCENT]
-descent_alt_km = [s.altitude_m / 1000 for s in states if s.phase == Phase.DESCENT]
-lats = [s.latitude_deg for s in states]
-lons = [s.longitude_deg for s in states]
+df = pd.DataFrame({
+    "time_min": [s.t / 60 for s in states],
+    "altitude_km": [s.altitude_m / 1000 for s in states],
+    "fall_speed": [-s.vertical_speed_ms for s in states],
+    "phase": [s.phase.value for s in states],
+    "lat": [s.latitude_deg for s in states],
+    "lon": [s.longitude_deg for s in states],
+})
+
+# Ground track in kilometres from launch. Degrees make a poor axis here: the
+# drift is a fraction of a degree but tens of km on the ground, so a lat/lon
+# plot collapses to a dot. Converting to km from the launch point fixes the scale.
+lat0, lon0 = df["lat"].iloc[0], df["lon"].iloc[0]
+m_per_deg_lat = 111_320.0
+m_per_deg_lon = m_per_deg_lat * math.cos(math.radians(lat0))
+df["east_km"] = (df["lon"] - lon0) * m_per_deg_lon / 1000
+df["north_km"] = (df["lat"] - lat0) * m_per_deg_lat / 1000
 
 # --- summary metrics ----------------------------------------------------------
 
@@ -83,7 +98,7 @@ col1, col2, col3, col4 = st.columns(4)
 col1.metric("Burst altitude", f"{cfg.burst_alt_m/1000:.1f} km")
 col2.metric("Time to burst", f"{flight.burst_time/60:.0f} min")
 col3.metric("Total flight time", f"{states[-1].t/60:.0f} min")
-peak_descent = max(descent_rate) if descent_rate else 0
+peak_descent = df["fall_speed"].max()
 col4.metric("Peak descent rate", f"{peak_descent:.0f} m/s")
 
 # --- plots --------------------------------------------------------------------
@@ -92,29 +107,62 @@ left, right = st.columns(2)
 
 with left:
     st.subheader("Altitude profile")
-    st.line_chart({"altitude (km)": alt_km}, x_label="sample", y_label="km")
-    st.caption("Linear ascent, burst, then fast-then-slowing descent.")
+    alt_chart = (
+        alt.Chart(df)
+        .mark_line(color="#2a78d6")
+        .encode(
+            x=alt.X("time_min", title="Time since launch (min)"),
+            y=alt.Y("altitude_km", title="Altitude (km)"),
+            tooltip=[alt.Tooltip("time_min", title="Time (min)", format=".0f"),
+                     alt.Tooltip("altitude_km", title="Altitude (km)", format=".1f")],
+        )
+        .properties(height=300)
+    )
+    st.altair_chart(alt_chart, width="stretch")
+    st.caption("Linear ascent, burst, then fast-then-slowing descent, over time.")
 
     st.subheader("Descent rate vs altitude")
-    if descent_rate:
-        # Show fall speed decaying as it enters denser air.
-        st.line_chart(
-            {"fall speed (m/s)": descent_rate},
-            x_label="descent sample (high to low altitude)", y_label="m/s",
+    descent = df[df["phase"] == "descent"]
+    if not descent.empty:
+        desc_chart = (
+            alt.Chart(descent)
+            .mark_line(color="#c0562e")
+            .encode(
+                x=alt.X("altitude_km", title="Altitude (km)",
+                        scale=alt.Scale(reverse=True)),  # high -> low as it falls
+                y=alt.Y("fall_speed", title="Fall speed (m/s)"),
+                tooltip=[alt.Tooltip("altitude_km", title="Altitude (km)", format=".1f"),
+                         alt.Tooltip("fall_speed", title="Fall speed (m/s)", format=".1f")],
+            )
+            .properties(height=260)
         )
-        st.caption("Fast in thin air just after burst, slowing toward landing.")
+        st.altair_chart(desc_chart, width="stretch")
+        st.caption("Fast in thin air just after burst, slowing as the air thickens.")
 
 with right:
     st.subheader("Ground track")
-    # A path of (lon, lat) points — lighter and more robust than a tile map,
-    # and it shows the drift path rather than scattered dots.
-    import pandas as pd
-    track = pd.DataFrame({"longitude": lons, "latitude": lats})
-    st.scatter_chart(track, x="longitude", y="latitude", size=8)
-    drift_km = _haversine_km(lats[0], lons[0], lats[-1], lons[-1])
+    # km axes and altitude-coloured path so the drift reads as a real shape.
+    track = (
+        alt.Chart(df)
+        .mark_circle(size=22)
+        .encode(
+            x=alt.X("east_km", title="East of launch (km)"),
+            y=alt.Y("north_km", title="North of launch (km)"),
+            color=alt.Color("altitude_km", title="Altitude (km)",
+                            scale=alt.Scale(scheme="viridis")),
+            order="time_min",
+            tooltip=[alt.Tooltip("east_km", title="East (km)", format=".1f"),
+                     alt.Tooltip("north_km", title="North (km)", format=".1f"),
+                     alt.Tooltip("altitude_km", title="Altitude (km)", format=".1f")],
+        )
+        .properties(height=360)
+    )
+    st.altair_chart(track, width="stretch")
+    drift_km = _haversine_km(df["lat"].iloc[0], df["lon"].iloc[0],
+                             df["lat"].iloc[-1], df["lon"].iloc[-1])
     st.caption(
-        f"Launch at ({lats[0]:.3f}, {lons[0]:.3f}); "
-        f"lands about {drift_km:.0f} km away, downwind."
+        f"Path from launch (0, 0); lands about {drift_km:.0f} km away, downwind. "
+        f"Colour shows altitude along the path — ascent and descent legs are distinct."
     )
 
 st.divider()

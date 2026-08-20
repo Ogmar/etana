@@ -21,7 +21,8 @@ This helps answer hardware questions without touching code:
 
 ## Using it
 
-If it is deployed (Streamlit Community Cloud), just open the link — no install.
+If it is deployed, just open the link — no install. Live at
+**https://etana-flight-explorer.streamlit.app/**
 
 To run locally:
 
@@ -29,3 +30,4 @@ To run locally:
 pip install -r requirements.txt
 streamlit run app.py
 ```
+
