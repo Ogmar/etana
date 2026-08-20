@@ -83,6 +83,66 @@ class Flight:
             return self._ascent_state(t)
         return self._descent_state(t)
 
+    def sample(self, count: int) -> list[FlightState]:
+        """Return `count`+1 evenly spaced states across the whole flight.
+
+        Unlike calling state_at repeatedly (which re-integrates position and
+        altitude from t=0 each time, making dense sampling O(n^2)), this walks
+        the flight once, carrying position forward — O(n) total. Use it for plots
+        and any dense sampling; state_at remains correct for single lookups.
+        """
+        total_t = self._landing_time_estimate()
+        dt = total_t / count if count else total_t
+
+        states: list[FlightState] = []
+        east_m = 0.0
+        north_m = 0.0
+        prev_t = 0.0
+        lat0 = self.cfg.launch_lat
+        lon_scale = _M_PER_DEG_LAT * math.cos(math.radians(lat0))
+
+        # Descent altitude carried forward across samples (one integration pass).
+        desc_alt = self.cfg.burst_alt_m
+        desc_t = self._burst_time
+        desc_dt = 0.5
+
+        def _descent_alt_at(target_t: float) -> float:
+            nonlocal desc_alt, desc_t
+            while desc_t < target_t and desc_alt > self.cfg.ground_alt_m:
+                desc_alt -= self._descent_speed(desc_alt) * desc_dt
+                desc_t += desc_dt
+            return max(desc_alt, self.cfg.ground_alt_m)
+
+        for i in range(count + 1):
+            t = i * dt
+
+            if t <= self._burst_time:
+                alt = self.cfg.ground_alt_m + self.cfg.ascent_rate_ms * t
+                phase, vspeed = Phase.ASCENT, self.cfg.ascent_rate_ms
+            else:
+                alt = _descent_alt_at(t)
+                if alt <= self.cfg.ground_alt_m:
+                    phase, vspeed, alt = Phase.LANDED, 0.0, self.cfg.ground_alt_m
+                else:
+                    phase, vspeed = Phase.DESCENT, -self._descent_speed(alt)
+
+            # Advance wind drift incrementally, using this sample's altitude.
+            step = t - prev_t
+            if step > 0:
+                scale = alt / self.cfg.burst_alt_m
+                east_m += self.cfg.wind_east_base_ms * scale * step
+                north_m += self.cfg.wind_north_base_ms * scale * step
+            prev_t = t
+
+            lat = lat0 + north_m / _M_PER_DEG_LAT
+            lon = self.cfg.launch_lon + east_m / lon_scale
+
+            states.append(FlightState(
+                t=t, phase=phase, altitude_m=alt,
+                latitude_deg=lat, longitude_deg=lon, vertical_speed_ms=vspeed,
+            ))
+        return states
+
     # --- ascent --------------------------------------------------------------
 
     def _ascent_state(self, t: float) -> FlightState:
