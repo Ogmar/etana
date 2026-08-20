@@ -94,3 +94,29 @@ def test_custom_config_changes_burst_time():
     low = Flight(FlightConfig(burst_alt_m=15000))
     high = Flight(FlightConfig(burst_alt_m=30000))
     assert low.burst_time < high.burst_time
+
+
+def test_sample_matches_state_at(flight):
+    """The fast one-pass sampler agrees with state_at at the same times."""
+    states = flight.sample(200)
+    for s in states[::40]:  # spot-check several
+        ref = flight.state_at(s.t)
+        assert abs(s.altitude_m - ref.altitude_m) < 50  # within integration step
+        assert s.phase == ref.phase
+
+
+def test_sample_covers_full_flight(flight):
+    """Sampling spans launch to landing with the right shape."""
+    states = flight.sample(300)
+    assert states[0].altitude_m == pytest.approx(flight.cfg.ground_alt_m, abs=1)
+    assert max(s.altitude_m for s in states) == pytest.approx(
+        flight.cfg.burst_alt_m, rel=0.02)
+    assert states[-1].phase == Phase.LANDED
+
+
+def test_sample_is_fast(flight):
+    """Dense sampling is O(n), not O(n^2) — 500 samples well under a second."""
+    import time
+    t0 = time.time()
+    flight.sample(500)
+    assert time.time() - t0 < 1.0
