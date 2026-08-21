@@ -3,7 +3,7 @@ name = "etana-api"
 version = "0.1.0"
 description = "Etana ground-segment archive and API (Django)"
 requires-python = ">=3.10"
-dependencies = ["django>=5.0", "psycopg[binary]>=3.1", "python-dotenv>=1.0", "etana-ccsds"]
+dependencies = ["django>=5.0", "djangorestframework>=3.14", "psycopg[binary]>=3.1", "python-dotenv>=1.0", "etana-ccsds"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]

@@ -1,2 +1,7 @@
-"""URL configuration. REST API views are added in Phase 3."""
-urlpatterns = []
+"""Project URL configuration."""
+
+from django.urls import include, path
+
+urlpatterns = [
+    path("api/", include("telemetry.urls")),
+]
