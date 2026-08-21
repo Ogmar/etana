@@ -1,0 +1,349 @@
+/* Etana Mission Console — vanta-black instrument aesthetic.
+   The look is a ground-segment ops screen: near-black surfaces, phosphor-cyan
+   live data, monospace numerics that read as an instrument, not a webpage. */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+:root {
+  --bg: #05070a;
+  --panel: #0b1017;
+  --panel-2: #0f1721;
+  --line: #1b2632;
+  --cyan: #00e5c7;
+  --blue: #4da3ff;
+  --amber: #ffb020;
+  --red: #ff5266;
+  --text: #d6e0ea;
+  --muted: #8a97a6;
+  --dim: #4a5765;
+
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: "Inter", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  /* Faint instrument grid in the void. */
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.console {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* --- top status bar --- */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  font-size: 13px;
+  color: var(--text);
+}
+.brand span {
+  color: var(--cyan);
+}
+
+.statusbar .sep {
+  flex: 1;
+}
+
+.livechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  padding: 5px 12px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.livechip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dim);
+}
+.livechip.live {
+  color: var(--cyan);
+  border-color: rgba(0, 229, 199, 0.4);
+  background: rgba(0, 229, 199, 0.06);
+}
+.livechip.live .dot {
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.livechip.complete {
+  color: var(--blue);
+  border-color: rgba(77, 163, 255, 0.35);
+}
+.livechip.complete .dot {
+  background: var(--blue);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.clock {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  letter-spacing: 0.06em;
+}
+.clock .label {
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* flight selector */
+.flightsel {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 6px 10px;
+}
+
+/* mode toggle */
+.modetoggle {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.modetoggle button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  cursor: pointer;
+}
+.modetoggle button.on {
+  background: rgba(0, 229, 199, 0.1);
+  color: var(--cyan);
+}
+
+/* --- main grid --- */
+
+.main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1px;
+  background: var(--line);
+}
+
+.stage {
+  background: var(--bg);
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.rail {
+  background: var(--panel);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* panels */
+.panel {
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px;
+}
+.panel h2 {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+/* readout rows */
+.readout {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(27, 38, 50, 0.5);
+}
+.readout:last-child { border-bottom: none; }
+.readout .k {
+  font-size: 12px;
+  color: var(--muted);
+}
+.readout .v {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+.readout .v .u {
+  font-size: 11px;
+  color: var(--dim);
+  margin-left: 3px;
+}
+.readout .v.hot { color: var(--cyan); }
+
+/* loss badges */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.badge {
+  font-family: var(--mono);
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 6px 10px;
+  min-width: 84px;
+}
+.badge .name {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  display: block;
+  margin-bottom: 3px;
+}
+.badge .count {
+  font-size: 16px;
+  color: var(--text);
+}
+.badge.lossy { border-color: rgba(255, 176, 32, 0.4); }
+.badge.lossy .count { color: var(--amber); }
+.badge.clean { border-color: rgba(0, 229, 199, 0.3); }
+.badge.clean .count { color: var(--cyan); }
+
+/* event log */
+.eventlog {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.eventrow {
+  display: flex;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(27, 38, 50, 0.5);
+}
+.eventrow .t {
+  color: var(--dim);
+  min-width: 58px;
+}
+.eventrow .e {
+  color: var(--blue);
+}
+
+/* stage content wrappers */
+.stage-head {
+  padding: 16px 20px 0;
+}
+.stage-head h1 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.stage-head p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+  font-family: var(--mono);
+}
+
+.chart-wrap {
+  padding: 8px 12px 18px;
+}
+
+/* empty / loading states */
+.empty {
+  margin: auto;
+  text-align: center;
+  color: var(--muted);
+  padding: 40px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.empty .big {
+  color: var(--dim);
+  font-size: 40px;
+  margin-bottom: 12px;
+  letter-spacing: 0.3em;
+}
+
+/* the flight-arc (layman) signature view */
+.arcstage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  min-height: 0;
+}
+.arc-metrics {
+  display: flex;
+  gap: 28px;
+  margin-top: 14px;
+}
+.arc-metric .val {
+  font-family: var(--mono);
+  font-size: 26px;
+  color: var(--cyan);
+  font-weight: 500;
+}
+.arc-metric .lab {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--dim);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+@media (max-width: 820px) {
+  .main { grid-template-columns: 1fr; }
+  .rail { border-top: 1px solid var(--line); }
+}
