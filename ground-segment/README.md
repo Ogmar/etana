@@ -134,6 +134,31 @@ Reprocess runs in a single transaction (a failure rolls back), never modifies ra
 packets, and can always be re-run. Comparing two calibrations needs no versioning:
 because raw is immutable, any calibration's output is derivable from it on demand.
 
+## The API
+
+A read-only REST API (Django REST Framework) serves the archive over HTTP. Run
+the development server from `services/api`:
+
+```
+python manage.py runserver
+```
+
+Endpoints (all under `/api/`), each returning JSON the dashboard consumes:
+
+| Endpoint | Returns |
+|----------|---------|
+| `GET /api/flights/` | All flights, with packet counts |
+| `GET /api/flights/{id}/` | One flight's detail |
+| `GET /api/flights/{id}/parameters/` | Parameter names available for the flight |
+| `GET /api/flights/{id}/series/{parameter}/` | A parameter's full time series |
+| `GET /api/flights/{id}/latest/` | Most recent GPS state (the moving dot) |
+| `GET /api/flights/{id}/loss/` | Per-APID loss totals (the loss badges) |
+| `GET /api/flights/{id}/events/` | The flight's events, in order |
+
+Ingestion opens a flight record when it starts and associates every packet and
+loss event with it, so the archive holds many flights and the API serves each
+independently. The API only reads; ingestion is the sole writer.
+
 ## Layout
 
 ```

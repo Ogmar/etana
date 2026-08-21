@@ -39,12 +39,13 @@ def _setup_django() -> None:
 
 
 def run(source: PacketSource, db: MissionDatabase, archive=None,
-        quiet: bool = False) -> dict:
+        quiet: bool = False, flight=None) -> dict:
     """Process every packet from a source until it is exhausted.
 
     If `archive` is provided (the api telemetry.archive module), each packet is
     stored and gaps are recorded. If None, packets are only decoded and shown
-    (no persistence) — useful for a quick look without a database.
+    (no persistence) — useful for a quick look without a database. If `flight` is
+    provided, stored packets and loss events are associated with it.
 
     Returns a summary dict: packets decoded, stored, and total lost.
     """
@@ -64,7 +65,8 @@ def run(source: PacketSource, db: MissionDatabase, archive=None,
 
         # Step 2 — archive (independent of gap detection).
         if archive is not None:
-            archive.store_packet(decoded, packet, received_at=received_at)
+            archive.store_packet(decoded, packet, received_at=received_at,
+                                 flight=flight)
             stats["stored"] += 1
 
         # Step 3 — gap detection (independent of archiving).
@@ -74,7 +76,7 @@ def run(source: PacketSource, db: MissionDatabase, archive=None,
             if archive is not None:
                 archive.record_loss(
                     gap.apid, gap.expected_sequence, gap.received_sequence,
-                    gap.lost_count, detected_at=received_at)
+                    gap.lost_count, detected_at=received_at, flight=flight)
             if not quiet:
                 print(f"  [loss] apid={gap.apid} lost {gap.lost_count} "
                       f"(expected {gap.expected_sequence}, got {gap.received_sequence})")
@@ -111,6 +113,8 @@ def main() -> None:
                         help="count packets without printing each one")
     parser.add_argument("--no-archive", action="store_true",
                         help="decode and display only; do not write to the database")
+    parser.add_argument("--name", default="",
+                        help="name for this flight record (when archiving)")
     parser.add_argument("--mdb", type=Path,
                         default=Path(__file__).resolve().parents[4] / "mdb" / "etana.yaml")
     args = parser.parse_args()
@@ -124,10 +128,15 @@ def main() -> None:
     db = load_mission_db(args.mdb)
 
     archive = None
+    flight = None
     if not args.no_archive:
         _setup_django()
         from telemetry import archive as archive_module
+        from telemetry.models import Flight
         archive = archive_module
+        flight = Flight.objects.create(name=args.name or "", source="tcp")
+        print(f"opened flight #{flight.id}"
+              + (f" ({flight.name})" if flight.name else ""))
 
     print(f"connecting to {args.host}:{args.port} ...")
     try:
@@ -138,9 +147,12 @@ def main() -> None:
     mode = "display only" if archive is None else "archiving to database"
     print(f"connected; receiving telemetry ({mode})\n")
     with source:
-        stats = run(source, db, archive=archive, quiet=args.quiet)
+        stats = run(source, db, archive=archive, quiet=args.quiet, flight=flight)
+    if flight is not None:
+        flight.mark_complete()
     print(f"\nstream ended; {stats['decoded']} decoded, "
-          f"{stats['stored']} stored, {stats['lost']} lost")
+          f"{stats['stored']} stored, {stats['lost']} lost"
+          + (f" (flight #{flight.id}, marked complete)" if flight else ""))
 
 
 if __name__ == "__main__":

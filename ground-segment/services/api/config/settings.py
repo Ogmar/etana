@@ -29,8 +29,28 @@ ALLOWED_HOSTS = os.environ.get("ETANA_ALLOWED_HOSTS", "localhost,127.0.0.1").spl
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
+    "django.contrib.staticfiles",
+    "rest_framework",
     "telemetry",
 ]
+
+REST_FRAMEWORK = {
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ],
+}
+
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {"context_processors": []},
+    },
+]
+
+STATIC_URL = "static/"
 
 MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",

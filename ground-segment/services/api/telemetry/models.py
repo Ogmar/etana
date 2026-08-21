@@ -16,6 +16,37 @@ adds rows to the same table, never a schema change. Values are stored both raw
 from django.db import models
 
 
+class Flight(models.Model):
+    """One mission run — a launch-to-landing (or a single simulated flight).
+
+    Packets and loss events belong to a flight, so the archive can hold many
+    flights and the API can serve them individually. A flight is opened when
+    ingestion starts and its window is bounded by the packets it contains.
+    """
+
+    name = models.CharField(max_length=120, blank=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=16, default="active",
+        choices=[("active", "active"), ("complete", "complete")],
+    )
+    source = models.CharField(max_length=32, default="tcp")
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def mark_complete(self):
+        from django.utils import timezone
+        self.status = "complete"
+        self.ended_at = timezone.now()
+        self.save(update_fields=["status", "ended_at"])
+
+    def __str__(self) -> str:
+        return self.name or f"Flight {self.pk}"
+
+
 class RawPacket(models.Model):
     """One received packet, stored bit-exact. The source of truth.
 
@@ -25,6 +56,8 @@ class RawPacket(models.Model):
     """
 
     # Identity and framing.
+    flight = models.ForeignKey("Flight", on_delete=models.CASCADE,
+                               related_name="packets", null=True, blank=True)
     apid = models.IntegerField(db_index=True)
     sequence_count = models.IntegerField()
 
@@ -105,6 +138,8 @@ class LossEvent(models.Model):
     received_sequence = models.IntegerField()
     lost_count = models.IntegerField()
     detected_at = models.DateTimeField(db_index=True)
+    flight = models.ForeignKey("Flight", on_delete=models.CASCADE,
+                               related_name="loss_events", null=True, blank=True)
 
     class Meta:
         ordering = ["detected_at"]

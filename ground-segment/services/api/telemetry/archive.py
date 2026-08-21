@@ -16,7 +16,7 @@ from .models import LossEvent, ParameterSample, RawPacket
 
 def store_packet(decoded, raw_bytes: bytes, received_at: datetime | None = None,
                  source: str = "tcp", rssi: int | None = None,
-                 snr: float | None = None) -> RawPacket:
+                 snr: float | None = None, flight=None) -> RawPacket:
     """Persist one decoded packet: the raw bytes plus every decoded parameter.
 
     `decoded` is a ccsds DecodedPacket. Returns the created RawPacket.
@@ -29,6 +29,7 @@ def store_packet(decoded, raw_bytes: bytes, received_at: datetime | None = None,
     onboard_time = decoded.raw.get("onboard_time")
 
     raw = RawPacket.objects.create(
+        flight=flight,
         apid=decoded.apid,
         sequence_count=decoded.sequence_count,
         raw_bytes=raw_bytes,
@@ -65,11 +66,13 @@ def store_packet(decoded, raw_bytes: bytes, received_at: datetime | None = None,
 
 
 def record_loss(apid: int, expected_sequence: int, received_sequence: int,
-                lost_count: int, detected_at: datetime | None = None) -> LossEvent:
+                lost_count: int, detected_at: datetime | None = None,
+                flight=None) -> LossEvent:
     """Persist a detected sequence gap."""
     if detected_at is None:
         detected_at = datetime.now(timezone.utc)
     return LossEvent.objects.create(
+        flight=flight,
         apid=apid,
         expected_sequence=expected_sequence,
         received_sequence=received_sequence,
