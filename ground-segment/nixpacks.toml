@@ -9,8 +9,8 @@ providers = ["python"]
 # finds it already installed by name when services/api installs second —
 # same order as the local dev setup documented in the project's CLAUDE.md.
 cmds = [
-  "pip install packages/ccsds",
-  "pip install services/api",
+  "python -m pip install packages/ccsds",
+  "python -m pip install services/api",
 ]
 
 [phases.build]
