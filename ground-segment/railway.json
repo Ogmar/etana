@@ -1,6 +1,6 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "deploy": {
-    "preDeployCommand": "cd services/api && python manage.py migrate"
+    "preDeployCommand": "cd services/api && /opt/venv/bin/python manage.py migrate"
   }
 }
