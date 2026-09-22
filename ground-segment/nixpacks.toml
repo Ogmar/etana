@@ -4,11 +4,13 @@
 providers = ["python"]
 
 [phases.install]
-# ensurepip first: forcing `providers` without an auto-detected requirements/
-# pyproject file at this root means Nixpacks' nix-provisioned python has no
-# pip module installed ("No module named pip"). ensurepip is stdlib, so this
-# needs no network access and no guessing which nixpkgs python version/attr
-# is actually in use.
+# Nix's python3 is marked "externally managed" (PEP 668) and /nix/store is
+# genuinely read-only, so pip can't install into the base interpreter at all
+# ("externally-managed-environment", not just a policy warning). A venv is
+# the standard escape hatch: its site-packages lives outside /nix/store, so
+# it's unaffected by the restriction. Every later phase must use the venv's
+# binaries explicitly (not bare `python`/`gunicorn`) since each phase runs in
+# its own shell — a venv "activation" in this phase wouldn't carry over.
 #
 # ccsds before services/api: services/api's pyproject.toml lists
 # "etana-ccsds" as a bare, unpinned dependency with no PyPI presence. It only
@@ -16,9 +18,9 @@ providers = ["python"]
 # installs second — same order as the local dev setup documented in the
 # project's CLAUDE.md.
 cmds = [
-  "python -m ensurepip --upgrade",
-  "python -m pip install packages/ccsds",
-  "python -m pip install services/api",
+  "python -m venv /opt/venv",
+  "/opt/venv/bin/pip install packages/ccsds",
+  "/opt/venv/bin/pip install services/api",
 ]
 
 [phases.build]
@@ -26,7 +28,7 @@ cmds = [
 # once per deploy instead of on every container restart. Needs ETANA_SECRET_KEY
 # / ETANA_DEBUG visible at build time: settings.py's production-safety check
 # runs at import, which collectstatic triggers.
-cmds = ["cd services/api && python manage.py collectstatic --noinput"]
+cmds = ["cd services/api && /opt/venv/bin/python manage.py collectstatic --noinput"]
 
 [start]
-cmd = "cd services/api && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
+cmd = "cd services/api && /opt/venv/bin/gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
