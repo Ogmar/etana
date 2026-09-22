@@ -1,0 +1,24 @@
+# Railway build config. Root Directory must be set to `ground-segment` in the
+# Railway dashboard — the API's local dependency (packages/ccsds) lives
+# outside services/api, so the build context has to include both.
+providers = ["python"]
+
+[phases.install]
+# ccsds first: services/api's pyproject.toml lists "etana-ccsds" as a bare,
+# unpinned dependency with no PyPI presence. It only resolves because pip
+# finds it already installed by name when services/api installs second —
+# same order as the local dev setup documented in the project's CLAUDE.md.
+cmds = [
+  "pip install packages/ccsds",
+  "pip install services/api",
+]
+
+[phases.build]
+# File I/O only (no DB, no network), so it belongs in build, not start — runs
+# once per deploy instead of on every container restart. Needs ETANA_SECRET_KEY
+# / ETANA_DEBUG visible at build time: settings.py's production-safety check
+# runs at import, which collectstatic triggers.
+cmds = ["cd services/api && python manage.py collectstatic --noinput"]
+
+[start]
+cmd = "cd services/api && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
