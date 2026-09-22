@@ -31,7 +31,19 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.staticfiles",
     "rest_framework",
+    "corsheaders",
     "telemetry",
+]
+
+# Origins allowed to make cross-origin requests to the API (the deployed
+# dashboard's origin). Comma-separated, e.g. "https://dashboard.example.com".
+# Empty by default: local dev doesn't need this, since Vite proxies /api to
+# this server itself (see ground-segment/frontend/vite.config.ts), so the
+# browser never makes a cross-origin request in the first place.
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("ETANA_CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
 ]
 
 REST_FRAMEWORK = {
@@ -70,6 +82,9 @@ STORAGES = {
 }
 
 MIDDLEWARE = [
+    # Must precede CommonMiddleware/WhiteNoiseMiddleware: corsheaders needs to
+    # add its headers to responses those middlewares can generate directly.
+    "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
 ]
