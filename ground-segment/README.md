@@ -1,13 +1,14 @@
 # Ground Segment
 
-Receives, decodes, archives, and (soon) serves Eagle-1 telemetry. Python
-ingestion, Postgres archive, with a Django/DRF API and React dashboard planned.
+Receives, decodes, archives, and serves Eagle-1 telemetry. Python ingestion,
+Postgres archive, a Django/DRF API, and a React dashboard.
 
-> **Status.** Phases 0-2 complete and runnable: the CCSDS codec, the transport
+> **Status.** Phases 0-3 complete and runnable: the CCSDS codec, the transport
 > seam, a simulator that flies a realistic profile with injected link loss, an
 > ingestion pipeline that decodes and archives to Postgres with per-APID loss
-> detection, and replay/recalibration from the raw archive. The REST API and
-> dashboard (Phase 3) are not yet built.
+> detection, replay/recalibration from the raw archive, a read-only REST API,
+> and a React dashboard. Deployed to production: API on Railway, dashboard on
+> Vercel at **[etana-eagle.vercel.app](https://etana-eagle.vercel.app/)**.
 
 ## Architecture
 
@@ -20,8 +21,8 @@ flowchart TD
     PIPE --> RAW[("Raw archive<br/>bit-exact bytes + ERT")]
     PIPE --> PARAM[("Parameter archive<br/>decoded time series")]
     RAW -.->|"replay / recalibrate"| SRC
-    PARAM --> API["API<br/>Django + DRF, read-only (planned)"]
-    API --> DASH["Dashboard<br/>React + TypeScript (planned)"]
+    PARAM --> API["API<br/>Django + DRF, read-only"]
+    API --> DASH["Dashboard<br/>React + TypeScript"]
 
     subgraph postgres["Postgres"]
         RAW
@@ -31,7 +32,7 @@ flowchart TD
 
 The ingestion path (packet source → codec → archive) is a long-running Python
 process, built and working. The read path (database → API → dashboard) is
-planned for Phase 3. The two meet at Postgres.
+built and deployed. The two meet at Postgres.
 
 The transport is abstracted behind the packet-source interface: `TcpPacketSource`
 now, `ReplayPacketSource` for re-reading the archive, and `LoRaPacketSource` for
@@ -49,8 +50,8 @@ the flight radio later. Nothing downstream of the interface depends on the sourc
 | Raw archive | Bit-exact bytes, Earth-receive time, link stats | Postgres | Built |
 | Parameter archive | Decoded, calibrated time series; regenerable from raw | Postgres | Built |
 | Replay / recalibrate | Re-decode stored raw with updated calibration, no re-flight | Python | Built |
-| API | Read-only REST over the archive | Django + DRF | Planned (Phase 3) |
-| Dashboard | Map, plots, loss indicators | React + TS | Planned (Phase 3) |
+| API | Read-only REST over the archive | Django + DRF | Built, deployed (Railway) |
+| Dashboard | Map, plots, loss indicators | React + TS | Built, deployed (Vercel) |
 
 ## Setup
 
@@ -171,7 +172,7 @@ ground-segment/
 │   ├── simulator/          # flight model, telemetry, link pathology, TCP server
 │   ├── ingestion/          # packet sources (tcp, replay), gap detection, runner
 │   └── api/                # Django archive: models, archive writer, reprocess
-└── frontend/               # React + TypeScript dashboard (planned)
+└── frontend/               # React + TypeScript dashboard, deployed on Vercel
 ```
 
 ## Tests
