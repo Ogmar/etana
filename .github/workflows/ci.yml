@@ -99,4 +99,5 @@ jobs:
         working-directory: ground-segment/services/api
         env:
           ETANA_DB: sqlite
+          ETANA_DEBUG: "1"
         run: python manage.py test

@@ -49,7 +49,11 @@ export interface FlightEvent {
   event: string;
 }
 
-const BASE = "/api";
+// Empty/unset defaults to "/api", the relative path Vite's dev proxy (see
+// vite.config.ts) forwards to the local Django server. Set VITE_API_BASE_URL
+// to an absolute URL when the frontend is deployed separately from the API.
+const rawBase = import.meta.env.VITE_API_BASE_URL || "/api";
+const BASE = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
 
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: { Accept: "application/json" } });

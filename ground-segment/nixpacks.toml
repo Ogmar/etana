@@ -1,0 +1,34 @@
+# Railway build config. Root Directory must be set to `ground-segment` in the
+# Railway dashboard — the API's local dependency (packages/ccsds) lives
+# outside services/api, so the build context has to include both.
+providers = ["python"]
+
+[phases.install]
+# Nix's python3 is marked "externally managed" (PEP 668) and /nix/store is
+# genuinely read-only, so pip can't install into the base interpreter at all
+# ("externally-managed-environment", not just a policy warning). A venv is
+# the standard escape hatch: its site-packages lives outside /nix/store, so
+# it's unaffected by the restriction. Every later phase must use the venv's
+# binaries explicitly (not bare `python`/`gunicorn`) since each phase runs in
+# its own shell — a venv "activation" in this phase wouldn't carry over.
+#
+# ccsds before services/api: services/api's pyproject.toml lists
+# "etana-ccsds" as a bare, unpinned dependency with no PyPI presence. It only
+# resolves because pip finds it already installed by name when services/api
+# installs second — same order as the local dev setup documented in the
+# project's CLAUDE.md.
+cmds = [
+  "python -m venv /opt/venv",
+  "/opt/venv/bin/pip install packages/ccsds",
+  "/opt/venv/bin/pip install services/api",
+]
+
+[phases.build]
+# File I/O only (no DB, no network), so it belongs in build, not start — runs
+# once per deploy instead of on every container restart. Needs ETANA_SECRET_KEY
+# / ETANA_DEBUG visible at build time: settings.py's production-safety check
+# runs at import, which collectstatic triggers.
+cmds = ["cd services/api && /opt/venv/bin/python manage.py collectstatic --noinput"]
+
+[start]
+cmd = "cd services/api && /opt/venv/bin/gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"

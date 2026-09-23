@@ -9,6 +9,8 @@ Postgres connection details are read from the environment.
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load ground-segment/.env so Django reads the same credentials Docker Compose
@@ -23,7 +25,18 @@ except ImportError:
     pass
 
 SECRET_KEY = os.environ.get("ETANA_SECRET_KEY", "dev-insecure-key-change-in-production")
-DEBUG = os.environ.get("ETANA_DEBUG", "1") == "1"
+
+# Default OFF. Fail-open here (defaulting DEBUG on) would mean a deploy that
+# forgets to set ETANA_DEBUG silently serves stack traces and settings in
+# error pages. Local dev opts in explicitly via ETANA_DEBUG=1 in .env.
+DEBUG = os.environ.get("ETANA_DEBUG", "0") == "1"
+
+if not DEBUG and SECRET_KEY == "dev-insecure-key-change-in-production":
+    raise ImproperlyConfigured(
+        "ETANA_SECRET_KEY must be set to a real secret when ETANA_DEBUG is "
+        "off (production). Refusing to start with the public default key."
+    )
+
 ALLOWED_HOSTS = os.environ.get("ETANA_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 INSTALLED_APPS = [
@@ -31,7 +44,19 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.staticfiles",
     "rest_framework",
+    "corsheaders",
     "telemetry",
+]
+
+# Origins allowed to make cross-origin requests to the API (the deployed
+# dashboard's origin). Comma-separated, e.g. "https://dashboard.example.com".
+# Empty by default: local dev doesn't need this, since Vite proxies /api to
+# this server itself (see ground-segment/frontend/vite.config.ts), so the
+# browser never makes a cross-origin request in the first place.
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("ETANA_CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
 ]
 
 REST_FRAMEWORK = {
@@ -51,8 +76,29 @@ TEMPLATES = [
 ]
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# CompressedManifestStaticFilesStorage requires collectstatic to have run (it
+# reads staticfiles.json for cache-busted filenames), which local `runserver`
+# dev flows don't do. Use it only when DEBUG is off, i.e. in production.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage.CompressedManifestStaticFilesStorage"
+            if not DEBUG
+            else "django.contrib.staticfiles.storage.StaticFilesStorage"
+        ),
+    },
+}
 
 MIDDLEWARE = [
+    # Must precede CommonMiddleware/WhiteNoiseMiddleware: corsheaders needs to
+    # add its headers to responses those middlewares can generate directly.
+    "corsheaders.middleware.CorsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
 ]
 
