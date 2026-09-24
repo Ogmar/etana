@@ -1,8 +1,9 @@
 import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router-dom";
 import { TopNav } from "./components/TopNav";
-import DashboardPage from "./pages/DashboardPage";
+import HomePage from "./pages/HomePage";
 
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const VehiclePage = lazy(() => import("./pages/VehiclePage"));
 
 export default function App() {
@@ -11,7 +12,15 @@ export default function App() {
       <TopNav />
       <div className="app-body">
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={<HomePage />} />
+          <Route
+            path="/dashboard"
+            element={(
+              <Suspense fallback={<div className="empty">Loading…</div>}>
+                <DashboardPage />
+              </Suspense>
+            )}
+          />
           <Route
             path="/vehicle"
             element={(
