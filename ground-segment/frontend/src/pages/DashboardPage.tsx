@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from "recharts";
 import { api, APID_NAMES, Flight, FlightEvent, LossRow } from "../lib/api";
 import { useLiveTelemetry, num } from "../lib/useLiveTelemetry";
 import { FlightArc } from "../components/FlightArc";
+import { AdvancedMode } from "../components/AdvancedMode";
 
-type Mode = "flight" | "mission";
+type Mode = "flight" | "advanced";
 
 export default function DashboardPage() {
   const [flights, setFlights] = useState<Flight[]>([]);
@@ -77,8 +75,8 @@ export default function DashboardPage() {
           <button className={mode === "flight" ? "on" : ""} onClick={() => setMode("flight")}>
             FLIGHT
           </button>
-          <button className={mode === "mission" ? "on" : ""} onClick={() => setMode("mission")}>
-            MISSION
+          <button className={mode === "advanced" ? "on" : ""} onClick={() => setMode("advanced")}>
+            ADVANCED
           </button>
         </div>
 
@@ -102,7 +100,7 @@ export default function DashboardPage() {
           ) : mode === "flight" ? (
             <FlightMode altSeries={altSeries} alt={alt} clock={missionClock} status={live.status} />
           ) : (
-            <MissionMode altSeries={altSeries} />
+            <AdvancedMode series={live.series} />
           )}
         </div>
 
@@ -233,43 +231,5 @@ function FlightMode({
         </div>
       </div>
     </div>
-  );
-}
-
-function MissionMode({ altSeries }: { altSeries: { t: number; v: number }[] }) {
-  const data = altSeries.map((p) => ({ t: +(p.t / 60).toFixed(2), alt: +(p.v / 1000).toFixed(2) }));
-  return (
-    <>
-      <div className="stage-head">
-        <h1>Telemetry · Altitude</h1>
-        <p>engineering units · onboard time</p>
-      </div>
-      <div className="chart-wrap" style={{ height: 340 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-            <CartesianGrid stroke="#1b2632" strokeDasharray="2 4" />
-            <XAxis
-              dataKey="t"
-              stroke="#4a5765"
-              tick={{ fill: "#8a97a6", fontSize: 11, fontFamily: "var(--mono)" }}
-              label={{ value: "Time (min)", fill: "#4a5765", fontSize: 11, position: "insideBottom", offset: -4 }}
-            />
-            <YAxis
-              stroke="#4a5765"
-              tick={{ fill: "#8a97a6", fontSize: 11, fontFamily: "var(--mono)" }}
-              label={{ value: "Altitude (km)", angle: -90, fill: "#4a5765", fontSize: 11, position: "insideLeft" }}
-            />
-            <Tooltip
-              contentStyle={{
-                background: "#0b1017", border: "1px solid #1b2632", borderRadius: 4,
-                fontFamily: "var(--mono)", fontSize: 12,
-              }}
-              labelStyle={{ color: "#8a97a6" }}
-            />
-            <Line type="monotone" dataKey="alt" stroke="#00e5c7" strokeWidth={2} dot={false} isAnimationActive={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </>
   );
 }
