@@ -10,6 +10,7 @@ export const theme = {
   blue: "#4da3ff",
   amber: "#ffb020",
   red: "#ff5266",
+  merge: "#b18cff",
   text: "#d6e0ea",
   muted: "#8a97a6",
   dim: "#4a5765",

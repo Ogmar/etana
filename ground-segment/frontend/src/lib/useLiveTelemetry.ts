@@ -10,6 +10,12 @@ export interface LiveState {
   sampleCount: number;
 }
 
+// Must match the row limit the `/since/` endpoint slices to
+// (services/api/telemetry/views.py, telemetry_since). A full page means
+// there's likely more backlog waiting, so it's fetched immediately instead
+// of waiting out the live-poll interval.
+const BACKLOG_PAGE_SIZE = 5000;
+
 const EMPTY: LiveState = {
   latest: {},
   series: {},
@@ -69,7 +75,12 @@ export function useLiveTelemetry(flightId: number | null, intervalMs = 1500) {
         // Keep polling while active, or while complete but still draining.
         const keepGoing = res.flight_status === "active" || res.count > 0;
         if (keepGoing && !cancelled) {
-          timer.current = window.setTimeout(poll, intervalMs);
+          // A full page almost certainly means more backlog is waiting (e.g.
+          // right after selecting a completed flight) — fetch it right away
+          // instead of trickling the whole history in on the live-poll
+          // cadence, which looked like slow, chunky loading.
+          const delay = res.count >= BACKLOG_PAGE_SIZE ? 0 : intervalMs;
+          timer.current = window.setTimeout(poll, delay);
         }
       } catch {
         // On error, retry after the interval (server may be starting).

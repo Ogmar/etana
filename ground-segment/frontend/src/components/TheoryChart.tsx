@@ -16,6 +16,14 @@ interface TheoryChartProps {
 
 const THEORY_SAMPLE_COUNT = 60;
 
+// A thin ring instead of a filled dot — "matches model" is a lighter-weight
+// signal than the actual reading itself, so it shouldn't out-weigh it visually.
+function MergeMark(props: any) {
+  const { cx, cy } = props;
+  if (cx == null || cy == null) return <g />;
+  return <circle cx={cx} cy={cy} r={3} fill="none" stroke={theme.merge} strokeWidth={1.2} />;
+}
+
 export function TheoryChart({ paramKey, paramSeries, altSeries }: TheoryChartProps) {
   const scatter = useMemo(
     () => joinToAltitude(paramSeries, altSeries).map((p) => ({
@@ -64,6 +72,35 @@ export function TheoryChart({ paramKey, paramSeries, altSeries }: TheoryChartPro
     return [min - pad, max + pad];
   }, [scatter, theory]);
 
+  // Actual and theoretical are drawn in different colors, but where the
+  // balloon's real reading tracks the model closely the two visually merge
+  // and it's easy to miss that they agree. Flag those points with a
+  // dedicated "merge" color instead of the usual actual-value cyan.
+  const { agreeing, diverging } = useMemo(() => {
+    const threshold = (yDomain[1] - yDomain[0]) * 0.05;
+    const interpTheory = (altitude: number): number | null => {
+      if (theory.length === 0) return null;
+      if (altitude <= theory[0].altitude) return theory[0].theoretical;
+      const last = theory[theory.length - 1];
+      if (altitude >= last.altitude) return last.theoretical;
+      for (let i = 1; i < theory.length; i++) {
+        if (theory[i].altitude >= altitude) {
+          const a = theory[i - 1], b = theory[i];
+          const span = b.altitude - a.altitude || 1;
+          return a.theoretical + (b.theoretical - a.theoretical) * ((altitude - a.altitude) / span);
+        }
+      }
+      return last.theoretical;
+    };
+    const agree: typeof scatter = [];
+    const diverge: typeof scatter = [];
+    for (const p of scatter) {
+      const tv = interpTheory(p.altitude);
+      (tv != null && Math.abs(p.value - tv) <= threshold ? agree : diverge).push(p);
+    }
+    return { agreeing: agree, diverging: diverge };
+  }, [scatter, theory, yDomain]);
+
   return (
     <div className="advcard">
       <h3>
@@ -98,18 +135,24 @@ export function TheoryChart({ paramKey, paramSeries, altSeries }: TheoryChartPro
               }}
               labelStyle={{ color: theme.muted }}
             />
-            <Scatter data={scatter} dataKey="value" fill={theme.cyan} fillOpacity={0.5} />
+            <Scatter data={diverging} dataKey="value" fill={theme.cyan} fillOpacity={0.55} />
+            <Scatter data={agreeing} dataKey="value" shape={MergeMark} />
             <Line
               data={theory}
               dataKey="theoretical"
               stroke={theme.amber}
-              strokeWidth={1.5}
+              strokeWidth={2}
               strokeDasharray="4 3"
               dot={false}
               isAnimationActive={false}
             />
           </ComposedChart>
         </ResponsiveContainer>
+      </div>
+      <div className="advcard-legend">
+        <span><i className="swatch" style={{ background: theme.cyan }} />actual</span>
+        <span><i className="swatch" style={{ background: "transparent", border: `1.2px solid ${theme.merge}` }} />matches model</span>
+        <span><i className="swatch" style={{ background: theme.amber }} />theoretical</span>
       </div>
     </div>
   );
