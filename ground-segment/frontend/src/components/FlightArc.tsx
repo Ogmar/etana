@@ -89,6 +89,20 @@ export function FlightArc({ series, burstAltM = 30000 }: Props) {
       {/* the arc */}
       {path && <path d={path} fill="none" stroke="#00e5c7" strokeWidth="2" filter="url(#glow)" />}
 
+      {/* streaming highlight — short bright dashes flowing along the arc from
+          launch toward the current position, reading as telemetry flowing in */}
+      {path && (
+        <path
+          d={path}
+          className="stream-flow"
+          fill="none"
+          stroke="#eafffa"
+          strokeOpacity="0.8"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+      )}
+
       {/* the balloon */}
       {dot && (
         <g filter="url(#glow)">

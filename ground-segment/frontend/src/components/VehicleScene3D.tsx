@@ -1,6 +1,7 @@
-import { useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
+import { useMemo, useRef } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { Html, OrbitControls, Stars } from "@react-three/drei";
+import type { Group } from "three";
 import { theme } from "../lib/theme";
 import { VehiclePart } from "../data/vehicleParts";
 
@@ -23,6 +24,7 @@ export function VehicleScene3D({ parts, selectedId, hoveredId, onSelect, onHover
     >
       <color attach="background" args={[theme.bg]} />
       <Stars radius={50} depth={30} count={2500} factor={2} saturation={0} fade speed={0.3} />
+      <DriftingHaze />
 
       <ambientLight intensity={0.35} />
       <directionalLight position={[4, 6, 4]} intensity={1.4} />
@@ -61,6 +63,56 @@ export function VehicleScene3D({ parts, selectedId, hoveredId, onSelect, onHover
         maxDistance={24}
       />
     </Canvas>
+  );
+}
+
+// Faint wisps drifting downward past the vehicle, at a few depths for
+// parallax — the illusion of the balloon climbing through the sky rather
+// than sitting still in front of a static starfield.
+interface HazeLayer {
+  x: number;
+  z: number;
+  w: number;
+  h: number;
+  speed: number;
+  opacity: number;
+}
+
+function DriftingHaze() {
+  const groupRef = useRef<Group>(null);
+  const layers = useMemo<HazeLayer[]>(() => {
+    const arr: HazeLayer[] = [];
+    for (let i = 0; i < 16; i++) {
+      arr.push({
+        x: (Math.random() - 0.5) * 40,
+        z: -15 - Math.random() * 35,
+        w: 6 + Math.random() * 10,
+        h: 2 + Math.random() * 3,
+        speed: 1 + Math.random() * 2,
+        opacity: 0.03 + Math.random() * 0.06,
+      });
+    }
+    return arr;
+  }, []);
+
+  useFrame((_, delta) => {
+    const g = groupRef.current;
+    if (!g) return;
+    g.children.forEach((child, i) => {
+      child.position.y -= layers[i].speed * delta * 3;
+      if (child.position.y < -40) child.position.y += 80;
+    });
+  });
+
+  return (
+    <group ref={groupRef}>
+      {layers.map((layer, i) => (
+        <mesh key={i} position={[layer.x, (i / layers.length) * 80 - 40, layer.z]}>
+          <planeGeometry args={[layer.w, layer.h]} />
+          <meshBasicMaterial color={theme.text} transparent opacity={layer.opacity} depthWrite={false} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
