@@ -75,10 +75,13 @@ This makes conformance testable without a radio — compare bytes, not behaviour
 - Whether onboard logging and transmission are concurrent or sequential.
 - Cutdown command handling, if an uplink is built (coordinate with the recovery
   system and the ground segment's commanding path).
-- Ground receiver firmware (the bridging MCU's own program, mirroring this
-  flight MCU's receive-side counterpart) — not yet started; needs its own
-  MCU/LoRa selection, parallel to
-  [`docs/mcu-lora-selection.md`](docs/mcu-lora-selection.md).
+- Ground receiver firmware (the bridging MCU's own program) — not yet started.
+  Its LoRa radio is fixed (same SX1276/7/8/9 part as this side, for RF
+  compatibility); its MCU is a separate, smaller selection — it only relays
+  bytes, so it doesn't need this MCU's sensor interfaces, extended
+  temperature range, or long-duration power budget. See
+  [`docs/mcu-lora-selection.md`](docs/mcu-lora-selection.md) for the flight-side
+  trade study this would mirror at a smaller scope.
 
 Held in this monorepo for a single mission history; separable into its own
 repository later if it develops an independent release cadence.

@@ -42,14 +42,18 @@ path.
 
 In the final system, bytes arrive from the **ground receiver**: a LoRa radio
 paired with its own bridging MCU, the mirror image of the flight MCU's
-encode-and-transmit path. The receiver MCU does not decode CCSDS — it only turns
-a received LoRa packet into a raw byte stream for the host running ingestion.
-Today that bridge is stood in for by TCP: the simulator plays the flight MCU and
-flight LoRa radio, and the TCP socket plays the RF hop and the ground receiver
-combined, delivering the same raw bytes the real bridge would. (If the ground
-receiver MCU ends up with integrated Wi-Fi forwarding those bytes over a network
-socket instead of a wired serial link, TCP is closer to the literal final
-mechanism than a stand-in — LoRa itself is the part guaranteed to change.)
+encode-and-transmit path. The receiver's LoRa radio is the same SX1276/7/8/9
+part as the flight side (for RF compatibility); its MCU is a separate, likely
+simpler selection, since relaying bytes carries none of the flight MCU's
+sensor-interfacing, extended-temperature, or long-duration requirements. The
+receiver MCU does not decode CCSDS either way — it only turns a received LoRa
+packet into a raw byte stream for the host running ingestion. Today that bridge
+is stood in for by TCP: the simulator plays the flight MCU and flight LoRa
+radio, and the TCP socket plays the RF hop and the ground receiver combined,
+delivering the same raw bytes the real bridge would. (If the ground receiver
+MCU ends up with integrated Wi-Fi forwarding those bytes over a network socket
+instead of a wired serial link, TCP is closer to the literal final mechanism
+than a stand-in — LoRa itself is the part guaranteed to change.)
 
 ## Components
 

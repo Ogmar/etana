@@ -110,12 +110,14 @@ Design decisions:
     [`flight-software/docs/mcu-lora-selection.md`](../flight-software/docs/mcu-lora-selection.md))
     encodes CCSDS packets and hands them to the flight LoRa radio
     (SX1276/7/8/9) for transmission.
-  - **Ground side** — a ground receiver LoRa radio picks up the transmission;
+  - **Ground side** — a ground receiver LoRa radio (the same SX1276/7/8/9
+    part as the flight side, for RF compatibility) picks up the transmission;
     a bridging MCU forwards the raw bytes to the ground segment host. This MCU
-    does not decode CCSDS — it is a transparent relay, mirroring the flight
-    side's radio/MCU pairing. Its specific MCU and interface to the ground
-    segment host (USB-serial, Wi-Fi, etc.) are not yet selected — see
-    [Open items](#8-open-items).
+    does not decode CCSDS — it is a transparent relay, so it carries none of
+    the flight MCU's sensor-interfacing, extended-temperature, or
+    long-duration requirements and is expected to be a simpler, cheaper part.
+    Its specific selection and its interface to the ground segment host
+    (USB-serial, Wi-Fi, etc.) are not yet made — see [Open items](#8-open-items).
 
 Link parameters are provisional pending RF review.
 
@@ -153,6 +155,7 @@ built and tested before flight hardware exists. Phase detail in
 - Retention of `last_rssi` given a downlink-only first flight.
 - Final LoRa parameters, pending RF review.
 - Ground receiver MCU selection and its interface to the ground segment host
-  (USB-serial vs. a networked bridge); the counterpart to the flight MCU/LoRa
-  trade study in
-  [`flight-software/docs/mcu-lora-selection.md`](../flight-software/docs/mcu-lora-selection.md).
+  (USB-serial vs. a networked bridge). The LoRa radio is fixed (same
+  SX1276/7/8/9 part as the flight side); the MCU is its own, likely simpler,
+  selection — a smaller-scope counterpart to the flight MCU/LoRa trade study
+  in [`flight-software/docs/mcu-lora-selection.md`](../flight-software/docs/mcu-lora-selection.md).
