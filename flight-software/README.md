@@ -16,21 +16,25 @@ the contract that lets the two sides be built independently.
 
 ```mermaid
 flowchart LR
-    subgraph flight["Flight software (Eagle-1)"]
+    subgraph flight["Flight software (Eagle-1 flight MCU)"]
         direction TB
         SENSE["Read sensors<br/>GPS, ozone, CO2, housekeeping"]
         BUILD["Build packets<br/>encode raw values as CCSDS"]
         LOG["Log to SD card<br/>every packet, bit-exact"]
-        TX["Transmit<br/>over LoRa"]
+        TX["Transmit<br/>via onboard LoRa radio"]
         SENSE --> BUILD --> LOG --> TX
     end
 
     MDB[("Mission database<br/>etana.yaml")]
     MDB -.->|"defines packet structure"| BUILD
 
-    TX ==>|"CCSDS bytes over LoRa"| GROUND["Ground segment"]
+    TX ==>|"CCSDS bytes, RF"| GRX["Ground receiver<br/>LoRa radio + bridging MCU"]
+    GRX ==>|"raw bytes, no decoding"| GROUND["Ground segment"]
     MDB -.->|"same contract"| GROUND
 ```
+
+The ground receiver is part of the link, not the ground segment: it relays
+bytes from radio to wire and does not read the mission database.
 
 ## Responsibilities
 
@@ -47,13 +51,17 @@ The flight software must, in order:
 3. **Log onboard** — write every packet bit-exact to SD storage before (or
    alongside) transmitting, so data survives link dropouts and can be recovered
    after landing.
-4. **Transmit** — send packets over the LoRa radio.
+4. **Transmit** — send packets over the onboard LoRa radio to the ground
+   receiver (a matching LoRa radio paired with its own bridging MCU, on the
+   ground segment side of the link).
 
 ## The contract with the ground segment
 
 The interface between flight and ground is the byte layout defined in
 [`../mdb/etana.yaml`](../mdb/etana.yaml). The flight software's encoder must
-produce bytes the ground segment's decoder accepts.
+produce bytes the ground segment's decoder accepts. The ground receiver sits
+physically between the two but is not a party to this contract — it forwards
+raw bytes without reading them, the same way the TCP socket does today.
 
 The ground segment includes a reference encoder (the `ccsds` package, in Python)
 that can serve as an oracle: for a given set of field values, the flight
@@ -67,6 +75,13 @@ This makes conformance testable without a radio — compare bytes, not behaviour
 - Whether onboard logging and transmission are concurrent or sequential.
 - Cutdown command handling, if an uplink is built (coordinate with the recovery
   system and the ground segment's commanding path).
+- Ground receiver firmware (the bridging MCU's own program) — not yet started.
+  Its LoRa radio is fixed (same SX1276/7/8/9 part as this side, for RF
+  compatibility); its MCU is a separate, smaller selection — it only relays
+  bytes, so it doesn't need this MCU's sensor interfaces, extended
+  temperature range, or long-duration power budget. See
+  [`docs/mcu-lora-selection.md`](docs/mcu-lora-selection.md) for the flight-side
+  trade study this would mirror at a smaller scope.
 
 Held in this monorepo for a single mission history; separable into its own
 repository later if it develops an independent release cadence.
