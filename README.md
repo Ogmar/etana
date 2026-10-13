@@ -7,8 +7,10 @@ ground segment, and a mission site.
 
 The vehicle, Eagle-1, carries an atmospheric payload (ozone, CO₂) with GPS and
 housekeeping instrumentation to approximately 30 km, downlinking telemetry as
-CCSDS Space Packets over a LoRa link. The ground segment decodes, archives, and
-displays the telemetry in real time.
+CCSDS Space Packets over a LoRa link: a flight MCU encodes and transmits over an
+onboard LoRa radio, a ground receiver (a matching LoRa radio paired with its own
+bridging MCU) picks it up and forwards the raw bytes to the ground segment. The
+ground segment decodes, archives, and displays the telemetry in real time.
 
 > **Status.** Ground segment Phases 0-3 complete: a CCSDS codec, a transport
 > seam, a simulator that flies a realistic profile with injected link loss, an
@@ -32,25 +34,37 @@ install required. **[Open the explorer](https://etana-flight-explorer.streamlit.
 flowchart LR
     MDB[("Mission database<br/>mdb/etana.yaml")]
 
-    FSW["Flight software<br/>Eagle-1"]
-    TRANSPORT["LoRa link"]
+    subgraph vehicle["Eagle-1"]
+        direction LR
+        FMCU["Flight MCU"] --> FLORA["Flight LoRa radio"]
+    end
+
+    subgraph groundrx["Ground receiver"]
+        direction LR
+        GLORA["Ground LoRa radio"] --> GMCU["Ground receiver MCU"]
+    end
+
     GROUND["Ground segment<br/>decode, archive, serve"]
     SITE["Mission site"]
 
-    FSW -->|"CCSDS bytes"| TRANSPORT --> GROUND --> SITE
+    FLORA -->|"RF, 902-928 MHz"| GLORA
+    GMCU -->|"raw bytes"| GROUND --> SITE
 
-    MDB -.-> FSW
+    MDB -.-> FMCU
     MDB -.-> GROUND
 ```
 
 The mission database (`mdb/etana.yaml`) is the sole definition of packet
-structure. The flight software reads it to encode telemetry; the ground segment
-reads it to decode telemetry.
+structure. The flight MCU reads it to encode telemetry; the ground segment reads
+it to decode telemetry. The ground receiver — a LoRa radio paired with a
+bridging MCU — carries CCSDS bytes between the two without interpreting them; it
+is a transparent relay, not a decoder.
 
 The ground segment abstracts the transport behind a packet-source interface,
 making the receive path independent of the source of bytes. During development
-that source is a simulator emitting the same byte stream the flight software will
-produce, which allows the ground segment to be built and tested before flight
+that source is a simulator standing in for the flight MCU and flight LoRa radio,
+emitting the same byte stream over TCP that the ground receiver MCU will deliver
+in flight — which allows the ground segment to be built and tested before flight
 hardware exists.
 
 See [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) and

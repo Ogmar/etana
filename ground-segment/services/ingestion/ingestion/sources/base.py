@@ -7,7 +7,10 @@ packets is defined once here, driven by the CCSDS primary header's length field.
 
 Concrete sources:
     TcpPacketSource   - reads from a TCP socket (development)
-    LoRaPacketSource  - reads from a radio serial link (flight, later)
+    LoRaPacketSource  - reads from the ground receiver's raw-byte link
+                        (production, later); the receiver's own LoRa radio
+                        and bridging MCU sit upstream of this and are not
+                        part of the ground segment
     ReplayPacketSource - re-reads stored raw packets (later)
 """
 

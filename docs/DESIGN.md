@@ -10,9 +10,13 @@ development simulator, or a replay of stored data.
 
 ## 1. Principles
 
-**The byte stream is the contract.** The flight software emits a defined CCSDS
-Space Packet byte layout. During development a simulator emits the identical
-layout. The receive path processes bytes and does not distinguish the source.
+**The byte stream is the contract.** The flight MCU emits a defined CCSDS Space
+Packet byte layout over its onboard LoRa radio. The ground receiver — a matching
+LoRa radio paired with a bridging MCU — relays those bytes to the ground segment
+host without interpreting them; it is part of the link, not a decoder. During
+development a simulator emits the identical byte layout over TCP, standing in
+for the flight MCU, the flight LoRa radio, the RF link, and the ground receiver
+combined. The receive path processes bytes and does not distinguish the source.
 
 **A single mission database defines packet structure.** `mdb/etana.yaml` is read
 by both the encoder (flight software or simulator) and the decoder (ground
@@ -88,7 +92,10 @@ with live simulated telemetry.
 
 ```mermaid
 flowchart TD
-    FSW["Flight software"] -->|"bytes"| SEAM["Packet source<br/>LoRa / TCP / replay"]
+    FMCU["Flight MCU"] -->|"CCSDS bytes"| FLORA["Flight LoRa radio"]
+    FLORA -->|"RF, 902-928 MHz"| GLORA["Ground LoRa radio"]
+    GLORA -->|"raw bytes, UART/SPI"| GMCU["Ground receiver MCU"]
+    GMCU -->|"bytes"| SEAM["Packet source<br/>LoRa-bridge / TCP / replay"]
     SEAM -->|"bytes"| ING["Ingestion pipeline<br/>decode, decommutate, loss detection"]
     ING --> RAW[("Raw archive<br/>bit-exact + ERT + RSSI")]
     ING --> PARAM[("Parameter archive<br/>time series")]
@@ -97,15 +104,18 @@ flowchart TD
     API <-->|"REST"| DASH["React / TS dashboard"]
 
     MDB[("Mission database")]
-    MDB -.-> FSW
+    MDB -.-> FMCU
     MDB -.-> ING
     PRED["Landing predictor<br/>+ GFS winds"] --> API
     PARAM -.-> PRED
 ```
 
-The mission database is read by the encoder (flight software) and the decoder
-(within ingestion). Components downstream of the packet source are independent of
-the transport.
+The mission database is read by the encoder (the flight MCU) and the decoder
+(within ingestion). The ground receiver — LoRa radio plus bridging MCU — sits
+between the two and reads neither: it relays bytes from radio to wire. Components
+downstream of the packet source are independent of the transport, so the seam
+cannot tell whether bytes arrived from the ground receiver, a TCP simulator, or
+replay.
 
 ## 4. Prototype architecture (Phases 0–3)
 
@@ -114,22 +124,32 @@ place of flight hardware:
 
 ```mermaid
 flowchart LR
-    SIM["1. Simulator"] -->|"TCP"| ING["2. Ingestion"]
+    SIM["1. Simulator<br/>(stands in for flight MCU<br/>+ flight LoRa radio)"] -->|"TCP<br/>(stands in for RF link +<br/>ground receiver: LoRa radio + MCU)"| ING["2. Ingestion"]
     ING --> PG[("3. Postgres")]
     PG --> API["4. Django / DRF"]
     API -->|"REST"| DASH["5. React dashboard"]
 ```
 
 1. Simulator — reads the mission database, walks a flight profile, encodes
-   packets, serves them over TCP, injects loss and corruption.
+   packets, serves them over TCP, injects loss and corruption. It plays the
+   role of the flight MCU and flight LoRa radio combined.
 2. Ingestion — `TcpPacketSource` → codec → raw store → decommutation → parameter
    store → gap detection.
 3. Postgres — raw and parameter tables.
 4. Django/DRF — read-only REST API over the archive.
 5. React/TS dashboard — map, plots, loss indicators; polls the API.
 
-Excluded from the prototype: LoRa, landing predictor, commanding, WebSocket push,
-authentication, full XTCE. Each is additive against the existing interfaces.
+The TCP socket is a reasonable stand-in because the ground receiver's actual job
+— LoRa radio plus bridging MCU — is only to turn a received radio packet into a
+raw byte stream for the ingestion host, which is exactly what the TCP socket
+does here. One plausible final implementation has the ground receiver MCU with
+integrated Wi-Fi forwarding those same raw bytes over a network socket rather
+than a wired serial link, in which case TCP would not be a stand-in for the
+bridge at all, only for the LoRa RF hop itself.
+
+Excluded from the prototype: the LoRa RF link and the ground receiver hardware,
+landing predictor, commanding, WebSocket push, authentication, full XTCE. Each
+is additive against the existing interfaces.
 
 ## 5. Repository structure
 

@@ -9,9 +9,12 @@ Etana is a high-altitude balloon mission. The vehicle, Eagle-1, carries an
 atmospheric payload to approximately 30 km, measuring ozone and CO₂ concentration
 against altitude while reporting position for tracking and recovery.
 
-Telemetry is downlinked as CCSDS Space Packets over a LoRa link. The ground
-segment decodes, archives, and displays the data, and computes a predicted
-landing point during descent.
+Telemetry is downlinked as CCSDS Space Packets over a LoRa link: the flight MCU
+encodes and transmits over an onboard LoRa radio, and a ground receiver — a
+matching LoRa radio paired with its own bridging MCU — picks up the transmission
+and forwards the raw bytes to the ground segment host. The ground segment
+decodes, archives, and displays the data, and computes a predicted landing point
+during descent.
 
 *Etana* is the mission; *Eagle-1* is the vehicle; `etana` is the repository. The
 ground segment, flight software, and mission site are components within it.
@@ -36,21 +39,34 @@ Out of scope for the first flight:
 ```mermaid
 flowchart LR
     MDB[("Mission database<br/>etana.yaml")]
-    FSW["Flight software<br/>Eagle-1"]
-    TRANSPORT["LoRa link"]
+
+    subgraph vehicle["Eagle-1"]
+        direction LR
+        FMCU["Flight MCU"] --> FLORA["Flight LoRa radio"]
+    end
+
+    subgraph groundrx["Ground receiver"]
+        direction LR
+        GLORA["Ground LoRa radio"] --> GMCU["Ground receiver MCU"]
+    end
+
     GROUND["Ground segment"]
     SITE["Mission site"]
 
-    FSW -->|"CCSDS bytes"| TRANSPORT --> GROUND --> SITE
-    MDB -.-> FSW
+    FLORA -->|"RF, 902-928 MHz"| GLORA
+    GMCU -->|"raw bytes"| GROUND --> SITE
+    MDB -.-> FMCU
     MDB -.-> GROUND
 ```
 
-The flight software encodes telemetry to CCSDS bytes; the ground segment decodes
-them. Both derive packet structure from the mission database, which is the sole
-definition of that structure. The transport is abstracted behind a packet-source
-interface in the ground segment, so the receive path is independent of whether
-bytes arrive over the radio or from a development simulator (see
+The flight MCU encodes telemetry to CCSDS bytes and transmits over its onboard
+LoRa radio; the ground segment decodes them. Both derive packet structure from
+the mission database, which is the sole definition of that structure. Between
+the two sits the ground receiver — a LoRa radio paired with its own bridging
+MCU — which relays bytes without interpreting them; it is part of the link, not
+the ground segment. The transport is abstracted behind a packet-source interface
+in the ground segment, so the receive path is independent of whether bytes
+arrive from the ground receiver or from a development simulator (see
 [`DESIGN.md`](DESIGN.md)).
 
 ## 4. Telemetry
@@ -88,6 +104,18 @@ Design decisions:
 - Spreading factor SF7–9, giving payloads of 100+ bytes. The largest packet is
   22 bytes including the 6-byte primary header.
 - Regulatory limits per ISED RSS-247. Power and duty-cycle limits pending RF review.
+- The link has a transmitter and a receiver, each a LoRa radio paired with an
+  MCU:
+  - **Flight side** — the flight MCU (STM32L4, per
+    [`flight-software/docs/mcu-lora-selection.md`](../flight-software/docs/mcu-lora-selection.md))
+    encodes CCSDS packets and hands them to the flight LoRa radio
+    (SX1276/7/8/9) for transmission.
+  - **Ground side** — a ground receiver LoRa radio picks up the transmission;
+    a bridging MCU forwards the raw bytes to the ground segment host. This MCU
+    does not decode CCSDS — it is a transparent relay, mirroring the flight
+    side's radio/MCU pairing. Its specific MCU and interface to the ground
+    segment host (USB-serial, Wi-Fi, etc.) are not yet selected — see
+    [Open items](#8-open-items).
 
 Link parameters are provisional pending RF review.
 
@@ -124,3 +152,7 @@ built and tested before flight hardware exists. Phase detail in
 - Whether a cutdown uplink is built.
 - Retention of `last_rssi` given a downlink-only first flight.
 - Final LoRa parameters, pending RF review.
+- Ground receiver MCU selection and its interface to the ground segment host
+  (USB-serial vs. a networked bridge); the counterpart to the flight MCU/LoRa
+  trade study in
+  [`flight-software/docs/mcu-lora-selection.md`](../flight-software/docs/mcu-lora-selection.md).
