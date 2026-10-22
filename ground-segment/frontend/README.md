@@ -34,9 +34,12 @@ and polls it.
 npm run build
 ```
 
-Produces static files in `dist/` that can be served by any static host. For
-production the API base URL is `/api`, so serve the frontend behind the same
-origin as the API (or configure a proxy).
+Produces static files in `dist/` that can be served by any static host. Set
+`VITE_API_BASE_URL` at build time to the deployed API's absolute URL (see
+`.env.example`); unset, it falls back to `/api` on the same origin.
+
+The app uses client-side routing, so the host must serve `index.html` for every
+route (e.g. a direct visit to `/dashboard`). `vercel.json` does this for Vercel.
 
 ## How live updates work
 

@@ -554,6 +554,15 @@ body {
 .advcard-chart {
   flex: 1;
   min-height: 160px;
+  position: relative;
+}
+/* Take the chart out of flow so its rendered size can't feed back into the
+   card's height. Under browser zoom (e.g. 125%) borders snap to device pixels,
+   leaving fractional sizes that ResponsiveContainer rounds up — the card then
+   grows, the chart re-measures, and the loop stretches the card vertically. */
+.advcard-chart > .recharts-responsive-container {
+  position: absolute;
+  inset: 0;
 }
 .advcard-legend {
   display: flex;
