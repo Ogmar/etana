@@ -1,0 +1,20 @@
+# Build output
+build/
+
+# CubeMX scratch files
+mx.scratch
+
+# Keep the CubeMX settings folder
+!.settings
+
+# Editor and tool caches
+.cache/
+*.log
+
+# VS Code: personal settings (see note below)
+.vscode/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
